@@ -52,6 +52,11 @@
   border-top: 1px solid #ece6f5;
 }
 
+.day-view-hybrid.is-dragging {
+  user-select: none;
+  cursor: grabbing;
+}
+
 /* ===== Timeline ===== */
 .day-timeline {
   flex: 1.7;
@@ -59,6 +64,11 @@
   display: flex;
   flex-direction: column;
   border-right: 1px solid #ece6f5;
+}
+
+.day-timeline.is-dragging {
+  user-select: none;
+  cursor: grabbing;
 }
 
 .day-timeline-scroll {
@@ -155,6 +165,25 @@
   z-index: 4;
   border: 2px dashed #fff;
   box-sizing: border-box;
+  overflow: hidden;
+  padding: 6px 8px;
+  color: #fff;
+}
+
+.day-time-block-preview-label {
+  min-width: 0;
+}
+
+.day-time-block-preview .day-time-block-title {
+  padding-right: 0;
+}
+
+.day-time-block-preview-time {
+  margin-top: 2px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.95;
+  white-space: nowrap;
 }
 
 .day-time-block-title {
@@ -303,8 +332,9 @@
   border-radius: 10px;
   padding: 10px;
   margin-bottom: 8px;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  cursor: grab;
+  user-select: none;
+  transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s;
 }
 
 .day-agenda-row:hover {
@@ -318,6 +348,29 @@
 
 .day-agenda-row.is-completed {
   opacity: 0.55;
+}
+
+.day-agenda-row.is-dragging {
+  opacity: 1;
+  cursor: grabbing;
+  background: #fff;
+  border-style: dashed;
+  border-color: #cbb6f0;
+  box-shadow: none;
+}
+
+.day-agenda-row.is-dragging.is-active {
+  border-color: #cbb6f0;
+  box-shadow: none;
+}
+
+.day-agenda-row.is-dragging .day-agenda-row-title,
+.day-agenda-row.is-dragging .day-agenda-row-meta {
+  opacity: 0.55;
+}
+
+.day-view-hybrid.is-dragging .day-agenda-row {
+  cursor: grabbing;
 }
 
 .day-agenda-swatch {
@@ -384,6 +437,7 @@
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+  cursor: pointer;
 }
 
 .day-agenda-icon-btn {

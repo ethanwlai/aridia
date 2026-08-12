@@ -5,7 +5,7 @@ import TaskCreationCard from './TaskCreationCard';
 import TaskActionsDropdown from './TaskActionsDropdown';
 import ShortBlockLabel from './ShortBlockLabel';
 import StackedBlockLabel from './StackedBlockLabel';
-import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK } from '../utils/calendarItems';
+import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK, getItemColor } from '../utils/calendarItems';
 
 // Global drag state to bypass getData() limitations
 window.globalDragState = window.globalDragState || { 
@@ -13,14 +13,6 @@ window.globalDragState = window.globalDragState || {
   startCustomDrag: false,
   startX: null,
   startY: null
-};
-
-// Task type colors
-const TASK_TYPE_COLORS = {
-  Work: '#ff6b81', // light red
-  School: '#4fc3f7',
-  Extra: '#ffb86b',
-  Entertainment: '#00bfae',
 };
 
 const hours = Array.from({ length: 24 }, (_, i) => i);
@@ -777,7 +769,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     const width = dayColumnWidth;
     
     // Get the correct color for the task type
-    const color = TASK_TYPE_COLORS[taskData.taskType] || '#a259ff';
+    const color = getItemColor(taskData);
     
     const result = {
       left: clampedLeft,
@@ -1696,7 +1688,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                 block._laneCount || 1
               );
               // Get color for task type
-              const color = block._group ? TASK_TYPE_COLORS[block.tasks[0].taskType] || '#a259ff' : TASK_TYPE_COLORS[block.taskType] || '#a259ff';
+              const color = getItemColor(block._group ? block.tasks[0] : block);
               // Generate a unique key for the block - include day index and block index to ensure uniqueness
               const blockKey = block._group 
                 ? `group-${dayIdx}-${idx}-${block.tasks.map(t => t._originalIdx).join('-')}` 
