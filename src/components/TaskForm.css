@@ -1,0 +1,219 @@
+.taskform-datepicker-popper {
+  z-index: 9999 !important;
+  position: absolute !important;
+  transform: translateY(60px) !important;
+}
+
+/* DatePicker flipping logic - similar to TaskCreationCard */
+.taskform-datepicker-popper.flipped-x {
+  transform: translateY(60px) translateX(-240px) !important; /* Move left by DatePicker width */
+}
+
+.taskform-datepicker-popper.flipped-y {
+  transform: translateY(-320px) !important; /* Move up higher than DatePicker height */
+}
+
+.taskform-datepicker-popper.flipped-x.flipped-y {
+  transform: translateY(-320px) translateX(-240px) !important; /* Both flips */
+}
+
+/* Fix vertical alignment for the Deadline input */
+input[type="text"][placeholder="MM/DD/YYYY"] {
+  margin-top: 0 !important;
+  padding-top: 0.875rem !important;
+  padding-bottom: 0.875rem !important;
+}
+
+/* Shake animation for duration input error */
+.duration-input-error {
+  animation: shake 0.3s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+/* Move the chevron in the task type dropdown to the left */
+select {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+  background-repeat: no-repeat !important;
+  background-position: calc(100% - 15px) center !important;
+  background-size: 16px !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+}
+
+/* Remove blinking carets from non-input elements */
+* {
+  caret-color: transparent !important;
+}
+
+/* Allow carets only on actual input elements */
+input, textarea, [contenteditable="true"] {
+  caret-color: auto !important;
+}
+
+/* Specifically target elements that might have carets near inputs */
+label, div, span, button, select {
+  caret-color: transparent !important;
+  user-select: none !important;
+}
+
+/* Ensure DatePicker elements don't show carets */
+.react-datepicker * {
+  caret-color: transparent !important;
+}
+
+/* Target any elements with focus that shouldn't show carets */
+*:focus:not(input):not(textarea):not([contenteditable="true"]) {
+  caret-color: transparent !important;
+  outline: none !important;
+}
+
+/* Circular Time Picker Styles */
+.circular-time-picker.light-theme {
+  background: white;
+  border-radius: 28px;
+  box-shadow: 0px 8px 32px rgba(0, 0, 0, 0.12);
+  width: 250px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  user-select: none;
+}
+
+.custom-time-picker-modal {
+  position: absolute;
+  left: 0; top: 0;
+  background: transparent !important;
+  z-index: 9999;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  pointer-events: none;
+}
+
+.custom-time-picker-modal > .circular-time-picker {
+  pointer-events: auto;
+}
+
+.picker-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+  gap: 0.1em !important;
+}
+
+.picker-input {
+  width: 1.8em !important;
+  font-size: 1.8rem !important;
+}
+
+.picker-colon {
+  font-size: 1.8rem !important;
+}
+
+.picker-circle-container {
+  width: 210px;
+  height: 210px;
+  position: relative;
+  margin: 0 auto;
+}
+
+.picker-circle {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  border-radius: 50%;
+}
+
+.picker-btn {
+  border-radius: 50%;
+  border: none;
+  background-color: #f3f0ff;
+  color: #6c63ff;
+  cursor: pointer;
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: background-color 0.2s;
+  font-weight: 600;
+}
+
+.picker-btn:hover {
+  background-color: #edeaff;
+}
+
+.picker-btn.selected {
+  background-color: #6c63ff;
+  color: white;
+  font-weight: 700;
+}
+
+.picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  margin-top: 16px;
+  gap: 8px;
+}
+
+.picker-cancel, .picker-ok {
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.picker-cancel {
+  background-color: #f0f0f0;
+  color: #555;
+}
+
+.picker-ok {
+  background-color: #6c63ff;
+  color: white;
+}
+
+/* Time picker pills */
+.pill-time {
+  background: #6c63ff;
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: none;
+  outline: none;
+  text-align: center;
+  min-width: 60px;
+  height: auto;
+  line-height: 1;
+  margin-right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s;
+  caret-color: transparent;
+  user-select: none;
+}
+
+.pill-time:hover,
+.pill-time:focus,
+.pill-time.active {
+  background: #a084e8 !important;
+}
+
+.pill-time.active {
+  background: #5146d8;
+}

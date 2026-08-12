@@ -1,0 +1,756 @@
+@import url('https://fonts.googleapis.com/css2?family=Karla:wght@300;400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@500&display=swap');
+
+/* === RESET === */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #2e0066;
+  font-family: 'Karla', sans-serif;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  height: 100dvh;
+  background: #2e0066;
+}
+
+/* === SCROLLBAR === */
+::-webkit-scrollbar {
+  width: 12px;
+}
+::-webkit-scrollbar-track {
+  background: #1c0033;
+}
+::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* === FRAME === */
+.frame-box {
+  position: relative;
+  width: 100%;
+  width: 100vw;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #2e0066;
+  padding-left: 48px;
+  padding-right: 48px;
+}
+
+.app-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* === SIDEBAR === */
+.sidebar {
+  width: 320px;
+  background: #2e0066;
+  color: white;
+  padding: 1.5rem;
+  overflow-y: auto;
+  height: 100%;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dayBlock {
+  margin-bottom: 1.5rem;
+}
+
+.dayLabelPillRow {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.dayLabel {
+  font-size: 18px;
+  font-weight: bold;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pills {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: nowrap;
+}
+
+.pill {
+  background: black;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+  width: 60px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.taskCard {
+  background: #5f33b1;
+  padding: 6px 10px;
+  margin: 4px 0;
+  border-radius: 6px;
+}
+
+.time {
+  font-size: 0.75rem;
+  color: #ccc;
+}
+
+.title {
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: white;
+}
+
+.noTask {
+  font-size: 0.75rem;
+  color: #aaa;
+  font-style: italic;
+}
+
+/* === CALENDAR HEADER === */
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background: white;
+  color: #222;
+  position: relative;
+  border-top-left-radius: 23px;
+  height: 80px; /* Fixed height to prevent layout shifts */
+  min-height: 80px; /* Ensure minimum height is maintained */
+}
+
+.calendar-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.calendar-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.calendar-controls button {
+  width: 70px;
+  height: 30px;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  caret-color: transparent;
+}
+
+.calendar-controls button:hover {
+  background: #f2f2f2;
+  border-color: #bbb;
+}
+
+.calendar-controls .active {
+  background: #2e0066;
+  color: white;
+  border: none;
+}
+
+.calendar-search {
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 0.85rem;
+  flex-shrink: 1;
+  flex-grow: 0;
+  z-index: 5;
+  min-width: 50px;
+  max-width: 240px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Handle very narrow search bars */
+.calendar-search:placeholder-shown {
+  text-overflow: ellipsis;
+}
+
+/* === CALENDAR WRAPPER === */
+.calendar-wrapper {
+  background: #2e0066;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding-top: 25px;
+  overflow: hidden;
+  margin-left: 0;
+}
+
+/* === GRID === */
+.calendar-grid {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+.calendar-grid::-webkit-scrollbar {
+  display: none;
+  background: transparent;
+}
+
+
+
+.calendar-content-wrapper {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* === HEADER ROW === */
+.header-row {
+  display: contents;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.day-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60px;
+  background: white;
+  border-left: none;
+  border-right: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e0e0e0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  caret-color: transparent;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.day-header:last-child {
+  border-right: none;
+}
+
+.weekday-label {
+  font-size: 10px;
+  color: #777;
+  text-transform: uppercase;
+  font-weight: 600;
+  caret-color: transparent;
+}
+
+.day-number {
+  font-size: 22px;
+  font-weight: bold;
+  color: #111;
+  margin-top: 0.2rem;
+  caret-color: transparent;
+}
+
+/* === SCROLLABLE TIME GRID === */
+.calendar-scroll-wrapper {
+  grid-column: 1 / -1;
+  overflow-y: scroll;
+  max-height: calc(100% - 60px);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.calendar-scroll-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+.calendar-scroll-area {
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.calendar-scroll-area::-webkit-scrollbar {
+  display: none;
+}
+
+.calendar-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.calendar-row {
+  display: grid;
+  grid-template-columns: 80px repeat(7, 1fr);
+  min-height: 50px;
+}
+
+/* === TIME CELLS === */
+.calendar-cell {
+  border-top: 1px solid #e1e1e1;
+  border-bottom: 1px solid #e1e1e1;
+  border-right: 1px solid #e1e1e1;
+  border-left: none;
+  background: white;
+  color: #111;
+  font-size: 0.85rem;
+  min-height: 50px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.calendar-cell:first-child {
+  border-left: none;
+}
+
+.calendar-cell.time-column {
+  border: none;
+  background: #fff;
+  min-width: 48px;
+  max-width: 60px;
+  width: 48px;
+  padding-right: 0;
+  padding-left: 1.5rem; /* Increased from 0.8rem to 2rem for more rightward text alignment */
+  text-align: right;
+  white-space: nowrap;
+}
+
+.time-column {
+  background: #fff;
+  color: #111;
+  font-weight: 600;
+  padding-right: 0.5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* === FIXES === */
+.calendar-row:first-of-type .calendar-cell {
+  border-top: none !important;
+}
+
+.calendar-row:first-of-type .calendar-cell.time-column {
+  border-top: none !important;
+}
+
+/* === ARIDIA CLASSIC === */
+.aridia-classic {
+  background: white;
+  color: black;
+  padding: 2rem;
+  margin-top: 2rem;
+  border-top: 3px solid #ccc;
+  width: 100%;
+  overflow: hidden auto;
+  max-height: 500px;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: #3b0a74;
+}
+
+.classic-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+/* Remove border from the top-left header cell */
+.header-row .day-header.time-column {
+  border-right: none;
+  border-bottom: none;
+  background: #fff;
+}
+
+/* Remove left border from the first day column in the grid */
+.calendar-row .calendar-cell:first-child {
+  border-left: none;
+}
+
+/* === WEATHER LOADING ANIMATION === */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* === CURRENT TIME INDICATOR === */
+.current-time-indicator {
+  pointer-events: none;
+  z-index: 10;
+}
+.current-time-pulse {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #a259ff 60%, #6c63ff 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  box-shadow: 0 0 12px 4px #a259ff88;
+  margin-left: -16px;
+  margin-right: 8px;
+  animation: pulse 2s infinite;
+  position: relative;
+  border: 2px solid #fff;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 #a259ff55, 0 0 12px 4px #a259ff88; }
+  70% { box-shadow: 0 0 0 12px #a259ff00, 0 0 12px 4px #a259ff88; }
+  100% { box-shadow: 0 0 0 0 #a259ff00, 0 0 12px 4px #a259ff88; }
+}
+.current-time-line {
+  flex: 1;
+  height: 3px;
+  background: rgba(162,89,255,0.35); /* slightly transparent light purple */
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+.current-time-line::before {
+  content: '';
+  position: absolute;
+  left: -60%;
+  top: 0;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(162,89,255,0) 0%, rgba(162,89,255,0.7) 50%, rgba(162,89,255,0) 100%);
+  border-radius: 2px;
+  animation: pulse-wave 10s linear infinite;
+  pointer-events: none;
+}
+@keyframes pulse-wave {
+  0% { left: -60%; opacity: 0.8; }
+  10% { opacity: 1; }
+  50% { left: 100%; opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+@media (max-width: 700px) {
+  .current-time-pulse {
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+    margin-left: -11px;
+    margin-right: 4px;
+  }
+  .current-time-line {
+    height: 2px;
+  }
+}
+
+.current-day-col {
+  background: rgba(162,89,255,0.04) !important;
+  /* border-left: 3px solid #a259ff; */
+  position: relative;
+  z-index: 1;
+}
+.current-day-header {
+  background: none !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.current-day-header .weekday-label,
+.current-day-header .day-number {
+  background: #a259ff;
+  color: #fff;
+  border-radius: 999px;
+  padding: 2px 14px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.calendar-nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: absolute;
+  top: 1.2rem;
+  left: 1.5rem;
+  z-index: 10;
+  background: white;
+  padding: 4px;
+  border-radius: 4px;
+}
+.calendar-nav-arrow {
+  background: #fff;
+  border: 1.5px solid #111;
+  color: #111;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  cursor: pointer;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  z-index: 3;
+  box-shadow: none;
+}
+.calendar-nav-arrow svg {
+  display: block;
+  margin: auto;
+}
+.calendar-nav-arrow:hover {
+  background: #f3f3f3;
+  color: #111;
+}
+
+.calendar-drag-selection {
+  position: absolute;
+  background: rgba(162,89,255,0.18);
+  border: 2px solid #a259ff;
+  border-radius: 8px;
+  z-index: 20;
+  pointer-events: none;
+  box-shadow: 0 2px 8px 0 #a259ff22;
+}
+.calendar-drag-label {
+  position: absolute;
+  background: #a259ff;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 4px 14px;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px 0 #a259ff44;
+  z-index: 30;
+  pointer-events: none;
+  white-space: nowrap;
+  left: 50%;
+  transform: translateX(-50%);
+  top: -32px;
+}
+
+/* Smooth transitions for calendar time blocks */
+.calendar-time-block {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Transparent highlight for overlapping calendar blocks */
+.calendar-time-block.transparent-back {
+  opacity: 0.5 !important;
+  box-shadow: 0 2px 12px 0 rgba(60,60,60,0.10);
+}
+.calendar-time-block.transparent-front {
+  opacity: 0.3 !important;
+  box-shadow: 0 2px 16px 0 rgba(60,60,60,0.13);
+}
+
+/* Smooth enter/exit animations for calendar blocks */
+.calendar-time-block-enter {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.calendar-time-block-enter-active {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.calendar-time-block-exit {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.calendar-time-block-exit-active {
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Task delete button hover effect */
+.calendar-time-block:hover .task-delete-btn {
+  opacity: 1 !important;
+}
+
+.calendar-time-block:hover .task-actions-dropdown-trigger {
+  opacity: 1 !important;
+}
+
+/* Task complete and cancel button hover effects for calendar grid */
+.calendar-time-block:hover .task-complete-btn:not(.selected) {
+  opacity: 1 !important;
+}
+
+/* Keep selected buttons always visible in calendar grid */
+.calendar-time-block .task-complete-btn.selected {
+  opacity: 1 !important;
+}
+
+/* Additional specificity for calendar grid buttons */
+.calendar-time-block .task-complete-btn.selected {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Ensure delete button never gets selected state */
+.calendar-time-block .task-delete-btn.selected {
+  opacity: 0 !important;
+}
+
+/* Task delete button hover effect for sidebar */
+.taskCard:hover .task-delete-btn {
+  opacity: 1 !important;
+}
+
+.taskCard:hover .task-actions-dropdown-trigger,
+.eventCard:hover .task-actions-dropdown-trigger {
+  opacity: 1 !important;
+}
+
+/* Task complete button hover effects for sidebar */
+.taskCard:hover .task-complete-btn:not(.selected) {
+  opacity: 1 !important;
+}
+
+/* Task list item hover effects */
+.task-list-item:hover .task-edit-btn {
+  opacity: 1 !important;
+}
+
+.task-list-item:hover .task-complete-btn:not(.selected) {
+  opacity: 1 !important;
+}
+
+.task-list-item:hover .task-delete-btn {
+  opacity: 1 !important;
+}
+
+.task-list-item:hover .task-actions-dropdown-trigger {
+  opacity: 1 !important;
+}
+
+/* Keep selected buttons always visible */
+.task-complete-btn.selected {
+  opacity: 1 !important;
+}
+
+/* Visual treatment for completed tasks in sidebar */
+.taskCard.completed {
+  background: rgba(34, 197, 94, 0.3) !important;
+  border: 1px solid rgba(34, 197, 94, 0.5) !important;
+}
+
+/* Visual treatment for incompleted tasks in sidebar */
+.taskCard.incompleted {
+  background: rgba(239, 68, 68, 0.3) !important;
+  border: 1px solid rgba(239, 68, 68, 0.5) !important;
+}
+
+/* Remove blinking caret from sidebar and dashboard */
+.sidebar * {
+  caret-color: transparent;
+}
+
+/* Remove blinking caret from dashboard buttons and clickable elements */
+.dashboard-panel * {
+  caret-color: transparent;
+}
+
+/* Ensure text inputs still show caret */
+.dashboard-panel input[type="text"],
+.dashboard-panel input[type="number"],
+.dashboard-panel input[type="date"],
+.dashboard-panel textarea {
+  caret-color: auto;
+}
+
+/* Hide scrollbar but keep scroll functionality */
+.dashboard-panel::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+
+.dashboard-panel {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+}
+
+/* Custom motivation slider thumb styling */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #6d28d9;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #6d28d9;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Prevent focus and hover effects on non-interactive motivation slider elements */
+[tabindex="-1"] {
+  outline: none !important;
+  cursor: default !important;
+}
+
+[tabindex="-1"]:focus {
+  outline: none !important;
+}
+
+[tabindex="-1"]:hover {
+  cursor: default !important;
+}

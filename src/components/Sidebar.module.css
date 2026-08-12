@@ -1,0 +1,177 @@
+/* src/components/Sidebar.module.css */
+
+.sidebar {
+  width: 340px;
+  background: #2e0066;
+  color: white;
+  padding: 1.5rem;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.sidebarContent {
+  flex: 1;
+  /* Extend into sidebar left padding so chevrons don't steal weather width */
+  box-sizing: border-box;
+  width: calc(100% + 20px);
+  margin-left: -20px;
+  padding-left: 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.sidebarContent::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+.dayBlock {
+  margin-bottom: 1.5rem;
+  width: 100%; /* Ensure day block takes full width */
+  display: flex;
+  flex-direction: column;
+}
+
+.dayLabelPillRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.dayToggle {
+  position: absolute;
+  left: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  flex-shrink: 0;
+  border-radius: 4px;
+}
+
+.dayToggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dayToggle svg {
+  display: block;
+  transition: transform 0.15s ease;
+}
+
+/* Default points right (toward day); expanded points down */
+.dayToggleExpanded svg {
+  transform: rotate(90deg);
+}
+
+.dayLabel {
+  font-size: 18px; /* 🔥 matches Figma */
+  font-weight: bold;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pills {
+  display: flex;
+  gap: 2px; /* Slightly reduced gap between pills */
+  flex-wrap: nowrap;
+}
+
+.pill {
+  background: black;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+}
+
+.taskCard {
+  background: rgba(95, 51, 177, 0.55); /* More transparent (default) */
+  padding: 6px 10px 20px 10px; /* Compact padding for tasks */
+  margin: 4px 0; /* Consistent margin for tasks */
+  border-radius: 18px;
+  min-height: 48px; /* Compact height for tasks */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  width: 100%; /* Ensure full width */
+  box-sizing: border-box; /* Include padding in width calculation */
+  position: relative; /* Required for absolute positioning of delete button */
+}
+
+.eventCard {
+  background: rgba(108, 99, 255, 0.55); /* Different color for events */
+  padding: 12px 10px 28px 10px; /* Larger padding for events */
+  margin: 4px 0; /* Consistent margin for events */
+  border-radius: 18px;
+  min-height: 64px; /* Larger height for events */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  width: 100%; /* Ensure full width */
+  box-sizing: border-box; /* Include padding in width calculation */
+  position: relative; /* Required for absolute positioning of delete button */
+}
+
+.time {
+  font-size: 0.75rem;
+  color: #ccc;
+}
+
+.title {
+  font-size: 0.8rem;
+  font-weight: bold; /* Changed from normal to bold */
+  color: white;
+  font-family: 'Inter', sans-serif;
+  overflow: hidden;
+  textOverflow: ellipsis;
+  whiteSpace: nowrap;
+  width: 100%;
+}
+
+.noTask {
+  font-size: 0.75rem;
+  color: #aaa;
+  font-style: italic;
+}
+
+.tasks {
+  width: 100%; /* Ensure tasks container takes full width */
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar * {
+  caret-color: transparent;
+}
+
+.currentTask {
+  background: rgba(95, 51, 177, 0.85); /* Darker for current task */
+}
+
+.eventCard.currentTask {
+  background: rgba(108, 99, 255, 0.85); /* Darker for current event */
+}
+
+/* Task delete button hover effect for sidebar */
+.taskCard:hover .task-delete-btn {
+  opacity: 1 !important;
+}
