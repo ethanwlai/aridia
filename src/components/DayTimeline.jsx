@@ -77,7 +77,13 @@ export default function DayTimeline({
   const onHighlightItemRef = useRef(onHighlightItem);
   onHighlightItemRef.current = onHighlightItem;
 
-  const dayStart = startOfDay(day);
+  // Stabilize the day reference across renders. `day` is recreated on every
+  // parent render, so deriving `dayStart` inline produced a new Date object
+  // each render. Effects that depend on `dayStart` (e.g. the external-drag
+  // handler below) would then re-run every render and, because they call
+  // setState, loop forever ("Maximum update depth exceeded") during a drag.
+  const dayStartMs = startOfDay(day).getTime();
+  const dayStart = useMemo(() => new Date(dayStartMs), [dayStartMs]);
   const isToday = isSameDate(dayStart, startOfDay(new Date()));
   const timedItems = useMemo(
     () => items.filter((item) => item.startTime && item.endTime),
