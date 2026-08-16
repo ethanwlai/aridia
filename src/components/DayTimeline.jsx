@@ -84,6 +84,15 @@ export default function DayTimeline({
   // setState, loop forever ("Maximum update depth exceeded") during a drag.
   const dayStartMs = startOfDay(day).getTime();
   const dayStart = useMemo(() => new Date(dayStartMs), [dayStartMs]);
+  const dayStartRef = useRef(dayStart);
+  dayStartRef.current = dayStart;
+  // Only the identity of the *dragged item* should (re)start the external-drag
+  // effect. Depend on a primitive id (not the item object or dayStart) so the
+  // effect can never re-run — and re-fire its setState cleanup at line ~297 —
+  // just because a parent render produced fresh object references mid-drag.
+  const externalDragItemRef = useRef(externalDragItem);
+  externalDragItemRef.current = externalDragItem;
+  const externalDragId = externalDragItem?.id ?? null;
   const isToday = isSameDate(dayStart, startOfDay(new Date()));
   const timedItems = useMemo(
     () => items.filter((item) => item.startTime && item.endTime),
@@ -244,10 +253,12 @@ export default function DayTimeline({
   }, []);
 
   useLayoutEffect(() => {
-    if (!externalDragItem) return undefined;
+    if (externalDragId == null) return undefined;
+    const dragItem = externalDragItemRef.current;
+    if (!dragItem) return undefined;
 
     const initial = {
-      item: externalDragItem,
+      item: dragItem,
       source: 'agenda',
       clickOffsetY: 0,
       previewTop: 0,
@@ -282,7 +293,7 @@ export default function DayTimeline({
       if (current?.source === 'agenda' && isOverScrollArea(e.clientX, e.clientY) && current.item?.id != null) {
         onUpdateTaskRef.current?.(
           current.item.id,
-          timeUpdatesForDrop(dayStart, current.previewStart ?? yToMinutes(e.clientY), getItemDurationMinutes(current.item))
+          timeUpdatesForDrop(dayStartRef.current, current.previewStart ?? yToMinutes(e.clientY), getItemDurationMinutes(current.item))
         );
         onHighlightItemRef.current?.(current.item.id);
       }
@@ -297,11 +308,10 @@ export default function DayTimeline({
       setDragState((prev) => (prev?.source === 'agenda' ? null : prev));
     };
   }, [
-    externalDragItem,
+    externalDragId,
     autoScrollAt,
     isOverScrollArea,
     yToMinutes,
-    dayStart,
   ]);
 
   useEffect(() => {
