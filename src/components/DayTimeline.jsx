@@ -5,61 +5,50 @@ import ShortBlockLabel from './ShortBlockLabel';
 import StackedBlockLabel from './StackedBlockLabel';
 import {
   assignOverlapLanes,
-  BLOCK_V_GAP,
-  formatDateKey,
   formatShortTimeRange,
+  getDayBlockHeightPx,
   getItemColor,
+  getItemDurationMinutes,
   getItemTitle,
   getLanedBlockBounds,
   isSameDate,
+  parseTimeToMinutes,
   SHORT_BLOCK,
+  snapMinutes,
   startOfDay,
+  timeUpdatesForDrop,
 } from '../utils/calendarItems';
 
 const ROW_HEIGHT = 50;
 const TIME_COL_WIDTH = 72;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
-
-function parseTimeToMinutes(timeStr) {
-  if (!timeStr) return null;
-  const [h, m] = String(timeStr).split(':').map(Number);
-  if (Number.isNaN(h) || Number.isNaN(m)) return null;
-  return h * 60 + m;
-}
-
-function formatMinutes(totalMinutes) {
-  const clamped = Math.max(0, Math.min(24 * 60 - 1, totalMinutes));
-  const h = Math.floor(clamped / 60);
-  const m = clamped % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
-
-function snapMinutes(minutes, step = 15) {
-  return Math.round(minutes / step) * step;
-}
-
-function getItemDurationMinutes(item) {
-  if (item.type === 'event' && item.startTime && item.endTime) {
-    const start = parseTimeToMinutes(item.startTime);
-    let end = parseTimeToMinutes(item.endTime);
-    if (start == null || end == null) return 30;
-    if (end <= start) end += 24 * 60;
-    return Math.max(15, end - start);
-  }
-  return item.duration || 30;
-}
+const SCROLL_EDGE = 48;
+const SCROLL_BASE_SPEED = 14;
+const BLOCK_SOURCE = 'block';
+const EXTERNAL_SOURCE = 'external';
 
 function getBlockGeometry(item) {
   const start = parseTimeToMinutes(item.startTime);
   if (start == null) return null;
   const duration = getItemDurationMinutes(item);
-  const rawHeight = Math.max((duration / 60) * ROW_HEIGHT, 18);
   return {
     top: (start / 60) * ROW_HEIGHT,
-    height: Math.max(rawHeight - BLOCK_V_GAP, SHORT_BLOCK.dayMinHeight),
+    height: getDayBlockHeightPx(duration, ROW_HEIGHT),
     start,
     duration,
   };
+}
+
+function previewHeightFor(item) {
+  return getBlockGeometry(item)?.height ?? getDayBlockHeightPx(getItemDurationMinutes(item), ROW_HEIGHT);
+}
+
+function sameDragPatch(prev, patch) {
+  if (!prev) return false;
+  for (const key of Object.keys(patch)) {
+    if (prev[key] !== patch[key]) return false;
+  }
+  return true;
 }
 
 export default function DayTimeline({
@@ -76,6 +65,8 @@ export default function DayTimeline({
   onQuickMove,
   onExtendDuration,
   scrollToId = null,
+  externalDragItem = null,
+  onExternalDragEnd,
 }) {
   const scrollRef = useRef(null);
   const cardRef = useRef(null);
@@ -87,19 +78,39 @@ export default function DayTimeline({
   const [dragState, setDragState] = useState(null);
   const [colWidth, setColWidth] = useState(0);
   const userHasScrolled = useRef(false);
+  const dragStateRef = useRef(null);
+  dragStateRef.current = dragState;
 
-  const dayStart = startOfDay(day);
+  const externalItemRef = useRef(externalDragItem);
+  externalItemRef.current = externalDragItem;
+  const onUpdateTaskRef = useRef(onUpdateTask);
+  onUpdateTaskRef.current = onUpdateTask;
+  const onExternalDragEndRef = useRef(onExternalDragEnd);
+  onExternalDragEndRef.current = onExternalDragEnd;
+  const onHighlightItemRef = useRef(onHighlightItem);
+  onHighlightItemRef.current = onHighlightItem;
+
+  const dayStartMs = startOfDay(day).getTime();
+  const dayStart = useMemo(() => new Date(dayStartMs), [dayStartMs]);
+  const dayStartRef = useRef(dayStart);
+  dayStartRef.current = dayStart;
+
   const isToday = isSameDate(dayStart, startOfDay(new Date()));
   const timedItems = useMemo(
     () => items.filter((item) => item.startTime && item.endTime),
     [items]
   );
   const lanedItems = useMemo(() => assignOverlapLanes(timedItems), [timedItems]);
+  const externalDragId = externalDragItem?.id ?? null;
+  const isBlockDragging = Boolean(dragState) && dragState.source === BLOCK_SOURCE;
 
   useLayoutEffect(() => {
     const el = dayColumnRef.current;
     if (!el) return undefined;
-    const update = () => setColWidth(el.clientWidth || 0);
+    const update = () => {
+      const width = el.clientWidth || 0;
+      setColWidth((prev) => (prev === width ? prev : width));
+    };
     update();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
     ro?.observe(el);
@@ -108,7 +119,7 @@ export default function DayTimeline({
       ro?.disconnect();
       window.removeEventListener('resize', update);
     };
-  }, [dayStart]);
+  }, [dayStartMs]);
 
   const getCurrentTimePosition = useCallback(() => {
     const now = new Date();
@@ -117,20 +128,23 @@ export default function DayTimeline({
 
   useEffect(() => {
     if (!isToday) {
-      setNowPos(null);
-      return;
+      setNowPos((prev) => (prev == null ? prev : null));
+      return undefined;
     }
-    const update = () => setNowPos(getCurrentTimePosition());
+    const update = () => {
+      const next = getCurrentTimePosition();
+      setNowPos((prev) => (prev === next ? prev : next));
+    };
     update();
     const id = setInterval(update, 10000);
     return () => clearInterval(id);
-  }, [isToday, getCurrentTimePosition, dayStart]);
+  }, [isToday, getCurrentTimePosition, dayStartMs]);
 
   useEffect(() => {
     if (userHasScrolled.current || !scrollRef.current) return;
     const target = isToday ? getCurrentTimePosition() : 8 * ROW_HEIGHT;
     scrollRef.current.scrollTop = Math.max(0, target - 120);
-  }, [dayStart, isToday, getCurrentTimePosition]);
+  }, [dayStartMs, isToday, getCurrentTimePosition]);
 
   useEffect(() => {
     if (!scrollToId || !scrollRef.current) return;
@@ -148,6 +162,30 @@ export default function DayTimeline({
     const y = clientY - rect.top;
     const minutes = snapMinutes((y / ROW_HEIGHT) * 60);
     return Math.max(0, Math.min(24 * 60 - 15, minutes));
+  }, []);
+
+  const autoScrollAt = useCallback((clientY) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    if (clientY < rect.top || clientY > rect.bottom) return;
+    const fromTop = clientY - rect.top;
+    const fromBottom = rect.bottom - clientY;
+    if (fromTop < SCROLL_EDGE) {
+      const speed = Math.round(SCROLL_BASE_SPEED * Math.max(1, (SCROLL_EDGE - fromTop) / 16));
+      el.scrollTop -= speed;
+    } else if (fromBottom < SCROLL_EDGE) {
+      const speed = Math.round(SCROLL_BASE_SPEED * Math.max(1, (SCROLL_EDGE - fromBottom) / 16));
+      el.scrollTop += speed;
+    }
+  }, []);
+
+  const isOverScrollArea = useCallback((clientX, clientY) => {
+    const el = scrollRef.current;
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    return clientX >= rect.left && clientX <= rect.right
+      && clientY >= rect.top && clientY <= rect.bottom;
   }, []);
 
   const openCreateAt = useCallback((clientX, clientY, startMinutes) => {
@@ -215,50 +253,72 @@ export default function DayTimeline({
 
     setDragState({
       item,
+      source: BLOCK_SOURCE,
       clickOffsetY,
       previewTop: geo.top,
+      previewStart: geo.start,
       moved: false,
+      overGrid: true,
     });
   };
 
   useEffect(() => {
-    if (!dragState) return undefined;
+    if (externalDragId == null) {
+      setDragState((prev) => (prev?.source === EXTERNAL_SOURCE ? null : prev));
+      return undefined;
+    }
+
+    const item = externalItemRef.current;
+    if (!item) return undefined;
+
+    setDragState((prev) => {
+      if (prev?.source === EXTERNAL_SOURCE && prev.item?.id === item.id) return prev;
+      return {
+        item,
+        source: EXTERNAL_SOURCE,
+        clickOffsetY: 0,
+        previewTop: 0,
+        previewStart: 0,
+        moved: true,
+        overGrid: false,
+      };
+    });
 
     const onMove = (e) => {
-      const minutes = yToMinutes(e.clientY - dragState.clickOffsetY);
-      const top = (minutes / 60) * ROW_HEIGHT;
-      setDragState((prev) => prev && ({
-        ...prev,
-        previewTop: top,
+      const current = dragStateRef.current;
+      if (!current || current.source !== EXTERNAL_SOURCE) return;
+      autoScrollAt(e.clientY);
+      const minutes = yToMinutes(e.clientY);
+      const overGrid = isOverScrollArea(e.clientX, e.clientY);
+      const previewTop = (minutes / 60) * ROW_HEIGHT;
+      const patch = {
+        previewTop,
         previewStart: minutes,
         moved: true,
-      }));
+        overGrid,
+      };
+      if (sameDragPatch(current, patch)) return;
+      const next = { ...current, ...patch };
+      dragStateRef.current = next;
+      setDragState(next);
     };
 
-    const onUp = () => {
-      setDragState((prev) => {
-        if (!prev) return null;
-        if (prev.moved && onUpdateTask && prev.item?.id != null) {
-          const startMinutes = Math.max(0, Math.min(24 * 60 - 15, prev.previewStart ?? 0));
-          const duration = getItemDurationMinutes(prev.item);
-          let endMinutes = startMinutes + duration;
-          const updates = {
-            deadline: formatDateKey(dayStart),
-            startTime: formatMinutes(startMinutes),
-          };
-          if (endMinutes >= 24 * 60) {
-            updates.endTime = formatMinutes(endMinutes - 24 * 60);
-            const next = new Date(dayStart);
-            next.setDate(next.getDate() + 1);
-            updates.endDeadline = formatDateKey(next);
-          } else {
-            updates.endTime = formatMinutes(endMinutes);
-            updates.endDeadline = null;
-          }
-          onUpdateTask(prev.item.id, updates);
-        }
-        return null;
-      });
+    const onUp = (e) => {
+      const current = dragStateRef.current;
+      if (current?.source === EXTERNAL_SOURCE && isOverScrollArea(e.clientX, e.clientY) && current.item?.id != null) {
+        onUpdateTaskRef.current?.(
+          current.item.id,
+          timeUpdatesForDrop(
+            dayStartRef.current,
+            current.previewStart ?? yToMinutes(e.clientY),
+            getItemDurationMinutes(current.item)
+          )
+        );
+        onHighlightItemRef.current?.(current.item.id);
+      }
+      setDragState(null);
+      dragStateRef.current = null;
+      onExternalDragEndRef.current?.();
     };
 
     window.addEventListener('mousemove', onMove);
@@ -267,10 +327,62 @@ export default function DayTimeline({
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [dragState, yToMinutes, onUpdateTask, dayStart]);
+  }, [externalDragId, autoScrollAt, isOverScrollArea, yToMinutes]);
+
+  useEffect(() => {
+    if (!isBlockDragging) return undefined;
+
+    const onMove = (e) => {
+      const current = dragStateRef.current;
+      if (!current || current.source !== BLOCK_SOURCE) return;
+      autoScrollAt(e.clientY);
+      const minutes = yToMinutes(e.clientY - current.clickOffsetY);
+      const previewTop = (minutes / 60) * ROW_HEIGHT;
+      setDragState((prev) => {
+        if (!prev || prev.source !== BLOCK_SOURCE) return prev;
+        const patch = {
+          previewTop,
+          previewStart: minutes,
+          moved: true,
+          overGrid: true,
+        };
+        if (sameDragPatch(prev, patch)) return prev;
+        return { ...prev, ...patch };
+      });
+    };
+
+    const onUp = () => {
+      const current = dragStateRef.current;
+      setDragState(null);
+      dragStateRef.current = null;
+      if (current?.source === BLOCK_SOURCE && current.moved && current.item?.id != null) {
+        onUpdateTaskRef.current?.(
+          current.item.id,
+          timeUpdatesForDrop(
+            dayStartRef.current,
+            current.previewStart ?? 0,
+            getItemDurationMinutes(current.item)
+          )
+        );
+      }
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [isBlockDragging, yToMinutes, autoScrollAt]);
+
+  const showPreview = Boolean(
+    dragState?.moved &&
+    dragState.item &&
+    (dragState.source !== EXTERNAL_SOURCE || dragState.overGrid)
+  );
 
   return (
-    <div className="day-timeline">
+    <div className={`day-timeline${dragState ? ' is-dragging' : ''}`}>
       <div
         className="day-timeline-scroll"
         ref={scrollRef}
@@ -307,7 +419,7 @@ export default function DayTimeline({
               const geo = getBlockGeometry(item);
               if (!geo) return null;
               const isDragging = dragState?.item?.id === item.id && dragState.moved;
-              const top = isDragging ? dragState.previewTop : geo.top;
+              const top = isDragging && dragState.source === BLOCK_SOURCE ? dragState.previewTop : geo.top;
               const height = geo.height;
               const color = getItemColor(item);
               const isActive = activeId === item.id || highlightedId === item.id;
@@ -437,13 +549,19 @@ export default function DayTimeline({
               );
             })}
 
-            {dragState?.moved && dragState.item && (() => {
+            {showPreview && (() => {
               const previewItem = lanedItems.find((i) => i.id === dragState.item.id) || dragState.item;
+              const useFullWidth = dragState.source === EXTERNAL_SOURCE;
               const { left, width } = getLanedBlockBounds(
                 0,
                 colWidth || dayColumnRef.current?.clientWidth || 320,
-                previewItem._lane || 0,
-                previewItem._laneCount || 1
+                useFullWidth ? 0 : (previewItem._lane || 0),
+                useFullWidth ? 1 : (previewItem._laneCount || 1)
+              );
+              const dropTimes = timeUpdatesForDrop(
+                dayStart,
+                dragState.previewStart ?? 0,
+                getItemDurationMinutes(dragState.item)
               );
               return (
                 <div
@@ -452,10 +570,17 @@ export default function DayTimeline({
                     top: dragState.previewTop,
                     left,
                     width,
-                    height: getBlockGeometry(dragState.item)?.height || 30,
+                    height: previewHeightFor(dragState.item),
                     background: getItemColor(dragState.item),
                   }}
-                />
+                >
+                  <div className="day-time-block-preview-label">
+                    <div className="day-time-block-title">{getItemTitle(dragState.item)}</div>
+                    <div className="day-time-block-preview-time">
+                      {formatShortTimeRange(dropTimes.startTime, dropTimes.endTime)}
+                    </div>
+                  </div>
+                </div>
               );
             })()}
           </div>
@@ -490,7 +615,7 @@ export default function DayTimeline({
           </div>
         )}
       </div>
-      <p className="day-timeline-hint">Double-click an empty slot to create · Drag a block to reschedule</p>
+      <p className="day-timeline-hint">Double-click an empty slot to create · Drag a block or list item to schedule</p>
     </div>
   );
 }

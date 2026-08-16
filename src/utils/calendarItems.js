@@ -39,7 +39,9 @@ export function getItemTitle(item) {
 }
 
 export function getItemColor(item) {
-  return TASK_TYPE_COLORS[item?.taskType] || '#a259ff';
+  const raw = item?.taskType;
+  const name = typeof raw === 'string' ? raw : raw?.name;
+  return TASK_TYPE_COLORS[name] || '#a259ff';
 }
 
 export function formatItemTime(item) {
@@ -154,6 +156,56 @@ function parseHm(timeStr) {
   const [h, m] = String(timeStr).split(':').map(Number);
   if (Number.isNaN(h) || Number.isNaN(m)) return null;
   return h * 60 + m;
+}
+
+export function parseTimeToMinutes(timeStr) {
+  return parseHm(timeStr);
+}
+
+export function formatMinutes(totalMinutes) {
+  const clamped = Math.max(0, Math.min(24 * 60 - 1, totalMinutes));
+  const h = Math.floor(clamped / 60);
+  const m = clamped % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+export function snapMinutes(minutes, step = 15) {
+  return Math.round(minutes / step) * step;
+}
+
+export function getItemDurationMinutes(item) {
+  if (item?.type === 'event' && item.startTime && item.endTime) {
+    const start = parseHm(item.startTime);
+    let end = parseHm(item.endTime);
+    if (start == null || end == null) return 30;
+    if (end <= start) end += 24 * 60;
+    return Math.max(15, end - start);
+  }
+  return item?.duration || 30;
+}
+
+export function timeUpdatesForDrop(dayStart, startMinutes, duration) {
+  const clampedStart = Math.max(0, Math.min(24 * 60 - 15, startMinutes));
+  const endMinutes = clampedStart + duration;
+  const updates = {
+    deadline: formatDateKey(dayStart),
+    startTime: formatMinutes(clampedStart),
+  };
+  if (endMinutes >= 24 * 60) {
+    updates.endTime = formatMinutes(endMinutes - 24 * 60);
+    const next = new Date(dayStart);
+    next.setDate(next.getDate() + 1);
+    updates.endDeadline = formatDateKey(next);
+  } else {
+    updates.endTime = formatMinutes(endMinutes);
+    updates.endDeadline = null;
+  }
+  return updates;
+}
+
+export function getDayBlockHeightPx(durationMinutes, rowHeight = 50) {
+  const rawHeight = Math.max((durationMinutes / 60) * rowHeight, 18);
+  return Math.max(rawHeight - BLOCK_V_GAP, SHORT_BLOCK.dayMinHeight);
 }
 
 /** Resolve start/end minutes for a rendered calendar block (supports multi-day slices). */
