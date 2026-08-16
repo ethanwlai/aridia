@@ -16,10 +16,20 @@ function PriorityLabel({ priority }) {
   return null;
 }
 
+function isAgendaActionTarget(target) {
+  return Boolean(
+    target.closest('.day-agenda-row-actions') ||
+    target.closest('.task-actions-dropdown-trigger') ||
+    target.closest('.task-actions-dropdown-menu')
+  );
+}
+
 function AgendaRow({
   item,
   isActive,
+  isDragging,
   onSelect,
+  onPointerDragStart,
   onEdit,
   onDelete,
   onUpdateStatus,
@@ -30,8 +40,19 @@ function AgendaRow({
   const completed = item.status === 'completed';
   return (
     <div
-      className={`day-agenda-row${isActive ? ' is-active' : ''}${completed ? ' is-completed' : ''}`}
-      onClick={() => onSelect?.(item)}
+      className={`day-agenda-row${isActive ? ' is-active' : ''}${completed ? ' is-completed' : ''}${isDragging ? ' is-dragging' : ''}`}
+      draggable={false}
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        if (isAgendaActionTarget(e.target)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onPointerDragStart?.(item, e);
+      }}
+      onClick={() => {
+        if (isDragging) return;
+        onSelect?.(item);
+      }}
     >
       <span className="day-agenda-swatch" style={{ background: getItemColor(item) }} />
       <div className="day-agenda-row-main">
@@ -95,7 +116,10 @@ export default function DayAgenda({
   scheduled = [],
   unscheduled = [],
   highlightedId = null,
+  draggingId = null,
+  isDragging = false,
   onSelectItem,
+  onPointerDragStart,
   onAdd,
   onEdit,
   onDelete,
@@ -111,6 +135,23 @@ export default function DayAgenda({
     setShowCreate(true);
   };
 
+  const renderRow = (item) => (
+    <AgendaRow
+      key={item.id}
+      item={item}
+      isActive={highlightedId === item.id && !isDragging}
+      isDragging={isDragging && draggingId === item.id}
+      onSelect={onSelectItem}
+      onPointerDragStart={onPointerDragStart}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      onUpdateStatus={onUpdateStatus}
+      onAutoSchedule={onAutoSchedule}
+      onQuickMove={onQuickMove}
+      onExtendDuration={onExtendDuration}
+    />
+  );
+
   return (
     <aside className="day-agenda">
       <div className="day-agenda-toolbar">
@@ -124,20 +165,7 @@ export default function DayAgenda({
         {scheduled.length === 0 ? (
           <p className="day-agenda-empty">No timed items</p>
         ) : (
-          scheduled.map((item) => (
-            <AgendaRow
-              key={item.id}
-              item={item}
-              isActive={highlightedId === item.id}
-              onSelect={onSelectItem}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onUpdateStatus={onUpdateStatus}
-              onAutoSchedule={onAutoSchedule}
-              onQuickMove={onQuickMove}
-              onExtendDuration={onExtendDuration}
-            />
-          ))
+          scheduled.map(renderRow)
         )}
       </section>
 
@@ -146,20 +174,7 @@ export default function DayAgenda({
         {unscheduled.length === 0 ? (
           <p className="day-agenda-empty">Nothing waiting to be timed</p>
         ) : (
-          unscheduled.map((item) => (
-            <AgendaRow
-              key={item.id}
-              item={item}
-              isActive={highlightedId === item.id}
-              onSelect={onSelectItem}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onUpdateStatus={onUpdateStatus}
-              onAutoSchedule={onAutoSchedule}
-              onQuickMove={onQuickMove}
-              onExtendDuration={onExtendDuration}
-            />
-          ))
+          unscheduled.map(renderRow)
         )}
       </section>
 

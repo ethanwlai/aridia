@@ -5,7 +5,7 @@ import TaskCreationCard from './TaskCreationCard';
 import TaskActionsDropdown from './TaskActionsDropdown';
 import ShortBlockLabel from './ShortBlockLabel';
 import StackedBlockLabel from './StackedBlockLabel';
-import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK } from '../utils/calendarItems';
+import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK, getItemColor, snapMinutes, getItemDurationMinutes, formatMinutes } from '../utils/calendarItems';
 
 // Global drag state to bypass getData() limitations
 window.globalDragState = window.globalDragState || { 
@@ -15,15 +15,41 @@ window.globalDragState = window.globalDragState || {
   startY: null
 };
 
-// Task type colors
-const TASK_TYPE_COLORS = {
-  Work: '#ff6b81', // light red
-  School: '#4fc3f7',
-  Extra: '#ffb86b',
-  Entertainment: '#00bfae',
-};
-
 const hours = Array.from({ length: 24 }, (_, i) => i);
+const ROW_HEIGHT = 50;
+const MAX_START_MINUTES = 24 * 60 - 15;
+
+function getHoveredCalendarCell(e) {
+  if (e?.target?.closest) {
+    const fromTarget = e.target.closest('.calendar-cell');
+    if (fromTarget && !fromTarget.classList.contains('time-column')) {
+      return fromTarget;
+    }
+  }
+  if (typeof document.elementsFromPoint !== 'function') return null;
+  const stack = document.elementsFromPoint(e.clientX, e.clientY) || [];
+  return stack.find((el) => el.classList?.contains('calendar-cell') && !el.classList.contains('time-column')) || null;
+}
+
+function snapStartFromPosition(position, clickOffsetY = 0) {
+  const cursorMinutes = position.hour * 60 + position.minute;
+  const offsetMinutes = (clickOffsetY / ROW_HEIGHT) * 60;
+  const clamped = Math.max(0, Math.min(MAX_START_MINUTES, snapMinutes(cursorMinutes - offsetMinutes)));
+  return {
+    startMinutes: clamped,
+    hour: Math.floor(clamped / 60),
+    minute: clamped % 60,
+  };
+}
+
+function snapTotalMinutes(hour, minute) {
+  const snapped = snapMinutes(hour * 60 + minute);
+  const clamped = Math.max(0, Math.min(MAX_START_MINUTES, snapped));
+  return {
+    hour: Math.floor(clamped / 60),
+    minute: clamped % 60,
+  };
+}
 
 // Dynamic text width calculation function
 function calculateOptimalTextWidth(textElement, textContent, blockHeight) {
@@ -520,7 +546,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
           // Use a small delay to ensure scroll has been applied
           requestAnimationFrame(() => {
                       // Recalculate position based on current mouse position
-          const position = calculatePosition(e);
+          const position = calculatePosition(e, getHoveredCalendarCell(e));
           if (position) {
             const preview = calculateDragPreview(position, customDragState.taskData, customDragState.clickOffsetY);
             setDragPreview(preview);
@@ -638,32 +664,29 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   
   // Optimized position calculation function with caching
   const calculatePosition = useCallback((e, cell) => {
+    const hoveredCell = cell && !cell.classList.contains('time-column')
+      ? cell
+      : getHoveredCalendarCell(e);
     
-    if (cell && !cell.classList.contains('time-column')) {
+    if (hoveredCell && !hoveredCell.classList.contains('time-column')) {
       // Cell-based calculation (preferred) - most efficient
-      const rowIdx = parseInt(cell.getAttribute('data-row'), 10);
-      const colIdx = parseInt(cell.getAttribute('data-col'), 10);
+      const rowIdx = parseInt(hoveredCell.getAttribute('data-row'), 10);
+      const colIdx = parseInt(hoveredCell.getAttribute('data-col'), 10);
       
       if (!isNaN(rowIdx) && !isNaN(colIdx)) {
-        const cellRect = cell.getBoundingClientRect();
-        let minute = Math.round(((e.clientY - cellRect.top) / cellRect.height) * 60);
-        minute = Math.round(minute / 15) * 15; // Snap to 15-minute intervals
-        if (minute === 60) minute = 0;
-        
-        const hour = rowIdx;
-        
-        // Ensure valid ranges
-        const clampedHour = Math.max(0, Math.min(23, hour));
-        const clampedMinute = Math.max(0, Math.min(59, minute));
+        const cellRect = hoveredCell.getBoundingClientRect();
+        const minuteInCell = Math.round(((e.clientY - cellRect.top) / cellRect.height) * 60);
+        const snapped = snapTotalMinutes(rowIdx, minuteInCell);
         const clampedColIdx = Math.max(colStart, Math.min(colEnd - 1, colIdx));
         
         return {
           x: e.clientX,
           y: e.clientY,
-          hour: clampedHour,
-          minute: clampedMinute,
+          hour: snapped.hour,
+          minute: snapped.minute,
           colIdx: clampedColIdx,
-          cellRect: cellRect
+          cellRect: cellRect,
+          rowIdx,
         };
       }
     }
@@ -689,19 +712,19 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     // Optimized calculations with fewer operations
     const relativeY = e.clientY - rect.top;
     const relativeX = e.clientX - rect.left;
-    const rowHeight = 50;
     const timeColumnWidth = 80;
     const dayColumnWidth = (rect.width - timeColumnWidth) / (colEnd - colStart);
     
-    const hour = Math.floor(relativeY / rowHeight);
-    const minute = Math.floor((relativeY % rowHeight) / (rowHeight / 60));
+    const hour = Math.floor(relativeY / ROW_HEIGHT);
+    const minute = Math.floor((relativeY % ROW_HEIGHT) / (ROW_HEIGHT / 60));
     const colIdx = Math.floor((relativeX - timeColumnWidth) / dayColumnWidth) + colStart;
+    const snapped = snapTotalMinutes(Math.max(0, hour), minute);
     
     return {
       x: e.clientX,
       y: e.clientY,
-      hour: Math.max(0, hour), // Allow hours to go beyond 23 for cross-day events
-      minute: Math.max(0, Math.min(59, minute)),
+      hour: snapped.hour,
+      minute: snapped.minute,
       colIdx: Math.max(colStart, Math.min(colEnd - 1, colIdx))
     };
   }, [colStart, colEnd]);
@@ -718,53 +741,36 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     }
     
     const scrollRect = scrollWrapperRef.current.getBoundingClientRect();
-    const scrollTop = scrollWrapperRef.current.scrollTop;
     const timeColumnWidth = 80;
     const availableWidth = scrollRect.width - timeColumnWidth;
     const dayColumnWidth = availableWidth / (colEnd - colStart);
     
     // Calculate position - match the exact calculation used for real blocks
     const left = timeColumnWidth + (position.colIdx - colStart) * dayColumnWidth;
-    // Calculate top position - position.hour/minute already account for scroll offset
-    const headerHeight = 60; // Height of the fixed header
-    
-    // Calculate dimensions based on task type
-    let duration;
-    if (taskData.type === 'event') {
-      // For events, calculate duration from original start and end times
-      const [startHour, startMinute] = taskData.startTime.split(':').map(Number);
-      const [endHour, endMinute] = taskData.endTime.split(':').map(Number);
-      const startTotalMinutes = startHour * 60 + startMinute;
-      const endTotalMinutes = endHour * 60 + endMinute;
-      // Handle cross-day events (end time before start time)
-      if (endTotalMinutes < startTotalMinutes) {
-        duration = (24 * 60 - startTotalMinutes) + endTotalMinutes; // Cross-day duration
-      } else {
-        duration = endTotalMinutes - startTotalMinutes;
-      }
+    const duration = getItemDurationMinutes(taskData);
+    const height = Math.max((duration / 60) * ROW_HEIGHT, 10);
+    const snappedStart = snapStartFromPosition(position, clickOffsetY);
+    const gridRect = gridRef.current?.getBoundingClientRect();
+    const headerHeight = 60;
+    let top;
+    if (position.cellRect && gridRect && typeof position.rowIdx === 'number') {
+      top = position.cellRect.top - gridRect.top
+        + ((snappedStart.startMinutes - position.rowIdx * 60) / 60) * ROW_HEIGHT;
     } else {
-      // For tasks, use the duration property
-      duration = taskData.duration || 30;
+      const scrollAreaTop = gridRect ? scrollRect.top - gridRect.top : headerHeight;
+      top = scrollAreaTop + (snappedStart.startMinutes / 60) * ROW_HEIGHT - scrollWrapperRef.current.scrollTop;
     }
-    const height = Math.max((duration / 60) * 50, 10); // 50px per hour, minimum 10px
-    
-    // Calculate the position based on click offset
-    const blockTop = position.hour * 50 + (position.minute / 60) * 50 + headerHeight;
-    let top = blockTop - clickOffsetY; // Position preview based on where user clicked
     
     // Check if this is a short block (less than 48px height, which is roughly 36 minutes)
     const isShortBlock = height < 48;
     
     // For events, allow extending past midnight for cross-day events
     // Only apply boundary constraints for tasks, not events
+    const minTop = gridRect ? (scrollRect.top - gridRect.top) : headerHeight;
     if (taskData.type !== 'event') {
-      // Ensure the preview doesn't go above the visible area, but allow it to extend into header if needed
-      const minTop = headerHeight; // Keep preview below the day header row
-      const maxTop = scrollRect.height - 10; // Leave some margin at bottom
+      const maxTop = (gridRect ? scrollRect.bottom - gridRect.top : scrollRect.height) - 10;
       top = Math.max(minTop, Math.min(maxTop, top));
     } else {
-      // For events, only prevent going above the header, but allow extending past the bottom
-      const minTop = headerHeight; // Keep preview below the day header row
       top = Math.max(minTop, top);
     }
     
@@ -777,7 +783,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     const width = dayColumnWidth;
     
     // Get the correct color for the task type
-    const color = TASK_TYPE_COLORS[taskData.taskType] || '#a259ff';
+    const color = getItemColor(taskData);
     
     const result = {
       left: clampedLeft,
@@ -786,7 +792,11 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       height,
       color,
       opacity: 0.5,
-      isShortBlock
+      isShortBlock,
+      startHour: snappedStart.hour,
+      startMinute: snappedStart.minute,
+      startMinutes: snappedStart.startMinutes,
+      duration,
     };
     
     return result;
@@ -1051,7 +1061,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     });
     
     // Calculate position and update preview with optimized timing
-    const position = calculatePosition(e);
+    const position = calculatePosition(e, getHoveredCalendarCell(e));
     
     // Update preview immediately for responsiveness, then optimize with requestAnimationFrame
     if (position && customDragState.taskData) {
@@ -1082,7 +1092,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       // Update preview after scroll to ensure it stays with cursor
       requestAnimationFrame(() => {
         if (customDragState.isActive && customDragState.taskData) {
-          const updatedPosition = calculatePosition(e);
+          const updatedPosition = calculatePosition(e, getHoveredCalendarCell(e));
           if (updatedPosition) {
             const updatedPreview = calculateDragPreview(updatedPosition, customDragState.taskData, customDragState.clickOffsetY);
             setDragPreview(updatedPreview);
@@ -1090,7 +1100,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         }
       });
     }
-  }, [customDragState.isActive, customDragState.taskData, calculatePosition, calculateDragPreview]);
+  }, [customDragState.isActive, customDragState.taskData, customDragState.clickOffsetY, calculatePosition, calculateDragPreview]);
 
   const handleCustomDragEnd = useCallback((e) => {
     if (!customDragState.isActive) return;
@@ -1110,68 +1120,27 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     
     // Check if we're over a valid drop area and use the current preview position
     if (dragPreview && customDragState.taskData) {
-      // Use the current preview position to ensure perfect alignment
       const task = customDragState.taskData;
-      
-      // Calculate duration based on task type
-      let duration;
-      if (task.type === 'event') {
-        // For events, calculate duration from original start and end times
-        const [startHour, startMinute] = task.startTime.split(':').map(Number);
-        const [endHour, endMinute] = task.endTime.split(':').map(Number);
-        const startTotalMinutes = startHour * 60 + startMinute;
-        const endTotalMinutes = endHour * 60 + endMinute;
-        // Handle cross-day events (end time before start time)
-        if (endTotalMinutes < startTotalMinutes) {
-          duration = (24 * 60 - startTotalMinutes) + endTotalMinutes; // Cross-day duration
-        } else {
-          duration = endTotalMinutes - startTotalMinutes;
-        }
-      } else {
-        // For tasks, use the duration property
-        duration = task.duration || 30;
-      }
-      
-      const height = Math.max((duration / 60) * 50, 10); // 50px per hour, minimum 10px
-      
-      // Convert the preview's top position back to hour/minute, accounting for scroll and click offset
-      const headerHeight = 60;
-      const scrollTop = scrollWrapperRef.current ? scrollWrapperRef.current.scrollTop : 0;
-      const previewTop = dragPreview.top;
-      
-      // The preview top is relative to the visible area, so we need to add scroll offset
-      // The preview is already positioned correctly with the click offset, so use it directly
-      const absoluteTop = previewTop + scrollTop;
-      const adjustedHour = Math.floor((absoluteTop - headerHeight) / 50);
-      const adjustedMinute = Math.floor(((absoluteTop - headerHeight) % 50) / (50 / 60));
-      
-      // Calculate new end time based on duration
-      let endHour, endMinute;
-      if (task.type === 'event') {
-        // For events, calculate end time manually to handle cross-day events properly
-        const startTotalMinutes = adjustedHour * 60 + adjustedMinute;
-        const endTotalMinutes = startTotalMinutes + duration;
-        
-        // Handle cross-day events (end time wraps around to next day)
-        if (endTotalMinutes >= 24 * 60) {
-          endHour = Math.floor((endTotalMinutes - 24 * 60) / 60);
-          endMinute = (endTotalMinutes - 24 * 60) % 60;
-        } else {
-          endHour = Math.floor(endTotalMinutes / 60);
-          endMinute = endTotalMinutes % 60;
-        }
-      } else {
-        // For tasks, use the Date constructor approach
-        const endTime = new Date(0, 0, 0, adjustedHour, adjustedMinute + duration);
-        endHour = endTime.getHours();
-        endMinute = endTime.getMinutes();
-      }
-      
-      const startTimeStr = `${String(adjustedHour).padStart(2, '0')}:${String(adjustedMinute).padStart(2, '0')}`;
-      const endTimeStr = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
-      
-      // Get the column from the current drag state or calculate it
-      const position = calculatePosition(e);
+      const duration = typeof dragPreview.duration === 'number'
+        ? dragPreview.duration
+        : getItemDurationMinutes(task);
+
+      const position = calculatePosition(e, getHoveredCalendarCell(e));
+      const snappedStart = typeof dragPreview.startMinutes === 'number'
+        ? {
+            startMinutes: dragPreview.startMinutes,
+            hour: dragPreview.startHour,
+            minute: dragPreview.startMinute,
+          }
+        : snapStartFromPosition(position || { hour: 0, minute: 0 }, customDragState.clickOffsetY);
+
+      const startMinutes = snappedStart.startMinutes;
+      const endTotalMinutes = startMinutes + duration;
+      const startTimeStr = formatMinutes(startMinutes);
+      const endTimeStr = endTotalMinutes >= 24 * 60
+        ? formatMinutes(endTotalMinutes - 24 * 60)
+        : formatMinutes(endTotalMinutes);
+
       const date = position ? days[position.colIdx] : days[0];
       const deadline = format(date, 'yyyy-MM-dd');
       
@@ -1212,7 +1181,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     setIsMovingTask(false);
     setMovedTaskId(null);
     setActiveBlockKey(null); // Clear highlighting after drag
-  }, [customDragState.isActive, customDragState.taskData, customDragState.isFromSidebar, calculatePosition, calculateDragPreview, days, onAdd, onUpdateTask]);
+  }, [customDragState.isActive, customDragState.taskData, customDragState.isFromSidebar, customDragState.clickOffsetY, dragPreview, calculatePosition, days, onUpdateTask]);
 
   const handleCustomDragLeave = useCallback((e) => {
     if (!customDragState.isActive) return;
@@ -1237,7 +1206,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     // Always restore the preview when entering the grid
     if (customDragState.taskData) {
       // Calculate position from current mouse position
-      const position = calculatePosition(e, e.target.closest('.calendar-cell'));
+      const position = calculatePosition(e, getHoveredCalendarCell(e));
       
       if (position) {
         const preview = calculateDragPreview(position, customDragState.taskData, customDragState.clickOffsetY);
@@ -1696,7 +1665,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                 block._laneCount || 1
               );
               // Get color for task type
-              const color = block._group ? TASK_TYPE_COLORS[block.tasks[0].taskType] || '#a259ff' : TASK_TYPE_COLORS[block.taskType] || '#a259ff';
+              const color = getItemColor(block._group ? block.tasks[0] : block);
               // Generate a unique key for the block - include day index and block index to ensure uniqueness
               const blockKey = block._group 
                 ? `group-${dayIdx}-${idx}-${block.tasks.map(t => t._originalIdx).join('-')}` 
@@ -2690,63 +2659,16 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                 marginTop: '2px',
               }}>
             {(() => {
-              // Calculate time based on the top edge of the preview block
-              if (dragPreview && customDragState.isActive) {
-                const headerHeight = 60;
-                const scrollTop = scrollWrapperRef.current ? scrollWrapperRef.current.scrollTop : 0;
-                
-                // Convert the preview's top position to time coordinates
-                const absoluteTop = dragPreview.top + scrollTop;
-                const topHour = Math.floor((absoluteTop - headerHeight) / 50);
-                const topMinute = Math.floor(((absoluteTop - headerHeight) % 50) / (50 / 60));
-                
-                const taskData = customDragState.taskData || dragTaskRef.current;
-                let duration;
-                if (taskData?.type === 'event') {
-                  // For events, calculate duration from original start and end times
-                  const [startHour, startMinute] = taskData.startTime.split(':').map(Number);
-                  const [endHour, endMinute] = taskData.endTime.split(':').map(Number);
-                  const startTotalMinutes = startHour * 60 + startMinute;
-                  const endTotalMinutes = endHour * 60 + endMinute;
-                  // Handle cross-day events (end time before start time)
-                  if (endTotalMinutes < startTotalMinutes) {
-                    duration = (24 * 60 - startTotalMinutes) + endTotalMinutes; // Cross-day duration
-                  } else {
-                    duration = endTotalMinutes - startTotalMinutes;
-                  }
-                } else {
-                  // For tasks, use the duration property
-                  duration = taskData?.duration || 30;
-                }
-                
-                // Calculate end time properly for cross-day events
-                let endHour, endMinute;
-                if (taskData?.type === 'event') {
-                  // For events, calculate end time manually to handle cross-day events properly
-                  const startTotalMinutes = topHour * 60 + topMinute;
-                  const endTotalMinutes = startTotalMinutes + duration;
-                  
-                  // Handle cross-day events (end time wraps around to next day)
-                  if (endTotalMinutes >= 24 * 60) {
-                    endHour = Math.floor((endTotalMinutes - 24 * 60) / 60);
-                    endMinute = (endTotalMinutes - 24 * 60) % 60;
-                  } else {
-                    endHour = Math.floor(endTotalMinutes / 60);
-                    endMinute = endTotalMinutes % 60;
-                  }
-                } else {
-                  // For tasks, use the Date constructor approach
-                  const endTime = new Date(0, 0, 0, topHour, topMinute + duration);
-                  endHour = endTime.getHours();
-                  endMinute = endTime.getMinutes();
-                }
-                
-                const startHour = String(topHour).padStart(2, '0');
-                const startMinute = String(topMinute).padStart(2, '0');
-                const endHourStr = String(endHour).padStart(2, '0');
-                const endMinuteStr = String(endMinute).padStart(2, '0');
-                
-                return `${startHour}:${startMinute} - ${endHourStr}:${endMinuteStr}`;
+              if (dragPreview && customDragState.isActive && typeof dragPreview.startMinutes === 'number') {
+                const duration = typeof dragPreview.duration === 'number'
+                  ? dragPreview.duration
+                  : getItemDurationMinutes(customDragState.taskData || dragTaskRef.current);
+                const endTotalMinutes = dragPreview.startMinutes + duration;
+                const startTimeStr = formatMinutes(dragPreview.startMinutes);
+                const endTimeStr = endTotalMinutes >= 24 * 60
+                  ? formatMinutes(endTotalMinutes - 24 * 60)
+                  : formatMinutes(endTotalMinutes);
+                return `${startTimeStr} - ${endTimeStr}`;
               }
               return '';
             })()}

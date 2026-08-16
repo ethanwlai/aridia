@@ -4,13 +4,7 @@ import { format, isToday } from 'date-fns';
 import Header from './Header';
 import TaskActionsDropdown from './TaskActionsDropdown';
 
-// Task type colors
-const TASK_TYPE_COLORS = {
-  Work: '#ff6b81', // light red
-  School: '#4fc3f7',
-  Extra: '#ffb86b',
-  Entertainment: '#00bfae',
-};
+import { getItemColor } from '../utils/calendarItems';
 
 // Utility: Parse YYYY-MM-DD as local date
 function parseLocalDate(dateStr) {
@@ -541,7 +535,7 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
               <div className={styles.tasks}>
                 {hasTasks ? (
                   tasksForDay.map((task, i) => {
-                    const dotColor = TASK_TYPE_COLORS[task.taskType] || '#bbb';
+                    const dotColor = task.taskType ? getItemColor(task) : '#bbb';
                     const isCurrent = isTaskCurrent(task);
                     const statusClass = task.status === 'completed' ? 'completed' : task.status === 'incompleted' ? 'incompleted' : '';
                     return (
@@ -588,17 +582,14 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
                         }}
 
                         onMouseDown={(e) => {
-                          if (task.type === 'task') {
-                            // Start custom drag for sidebar tasks
-                            e.preventDefault();
-                            e.stopPropagation();
-                            
-                            // Set global state to indicate custom drag should start
-                            window.globalDragState.currentTask = task;
-                            window.globalDragState.startCustomDrag = true;
-                            window.globalDragState.startX = e.clientX;
-                            window.globalDragState.startY = e.clientY;
-                          }
+                          // Start custom drag for sidebar tasks and events
+                          e.preventDefault();
+                          e.stopPropagation();
+                          
+                          window.globalDragState.currentTask = task;
+                          window.globalDragState.startCustomDrag = true;
+                          window.globalDragState.startX = e.clientX;
+                          window.globalDragState.startY = e.clientY;
                         }}
                         onMouseEnter={(e) => {
                           const deleteBtn = e.currentTarget.querySelector('.task-delete-btn');
