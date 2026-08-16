@@ -25,7 +25,6 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const SCROLL_EDGE = 48;
 const SCROLL_BASE_SPEED = 14;
 const BLOCK_SOURCE = 'block';
-const EXTERNAL_SOURCE = 'external';
 
 function getBlockGeometry(item) {
   const start = parseTimeToMinutes(item.startTime);
@@ -65,8 +64,6 @@ export default function DayTimeline({
   onQuickMove,
   onExtendDuration,
   scrollToId = null,
-  externalDragItem = null,
-  onExternalDragEnd,
 }) {
   const scrollRef = useRef(null);
   const cardRef = useRef(null);
@@ -81,14 +78,8 @@ export default function DayTimeline({
   const dragStateRef = useRef(null);
   dragStateRef.current = dragState;
 
-  const externalItemRef = useRef(externalDragItem);
-  externalItemRef.current = externalDragItem;
   const onUpdateTaskRef = useRef(onUpdateTask);
   onUpdateTaskRef.current = onUpdateTask;
-  const onExternalDragEndRef = useRef(onExternalDragEnd);
-  onExternalDragEndRef.current = onExternalDragEnd;
-  const onHighlightItemRef = useRef(onHighlightItem);
-  onHighlightItemRef.current = onHighlightItem;
 
   const dayStartMs = startOfDay(day).getTime();
   const dayStart = useMemo(() => new Date(dayStartMs), [dayStartMs]);
@@ -101,7 +92,6 @@ export default function DayTimeline({
     [items]
   );
   const lanedItems = useMemo(() => assignOverlapLanes(timedItems), [timedItems]);
-  const externalDragId = externalDragItem?.id ?? null;
   const isBlockDragging = Boolean(dragState) && dragState.source === BLOCK_SOURCE;
 
   useLayoutEffect(() => {
@@ -180,14 +170,6 @@ export default function DayTimeline({
     }
   }, []);
 
-  const isOverScrollArea = useCallback((clientX, clientY) => {
-    const el = scrollRef.current;
-    if (!el) return false;
-    const rect = el.getBoundingClientRect();
-    return clientX >= rect.left && clientX <= rect.right
-      && clientY >= rect.top && clientY <= rect.bottom;
-  }, []);
-
   const openCreateAt = useCallback((clientX, clientY, startMinutes) => {
     if (!scrollRef.current) return;
     const scrollRect = scrollRef.current.getBoundingClientRect();
@@ -263,73 +245,6 @@ export default function DayTimeline({
   };
 
   useEffect(() => {
-    if (externalDragId == null) {
-      setDragState((prev) => (prev?.source === EXTERNAL_SOURCE ? null : prev));
-      return undefined;
-    }
-
-    const item = externalItemRef.current;
-    if (!item) return undefined;
-
-    setDragState((prev) => {
-      if (prev?.source === EXTERNAL_SOURCE && prev.item?.id === item.id) return prev;
-      return {
-        item,
-        source: EXTERNAL_SOURCE,
-        clickOffsetY: 0,
-        previewTop: 0,
-        previewStart: 0,
-        moved: true,
-        overGrid: false,
-      };
-    });
-
-    const onMove = (e) => {
-      const current = dragStateRef.current;
-      if (!current || current.source !== EXTERNAL_SOURCE) return;
-      autoScrollAt(e.clientY);
-      const minutes = yToMinutes(e.clientY);
-      const overGrid = isOverScrollArea(e.clientX, e.clientY);
-      const previewTop = (minutes / 60) * ROW_HEIGHT;
-      const patch = {
-        previewTop,
-        previewStart: minutes,
-        moved: true,
-        overGrid,
-      };
-      if (sameDragPatch(current, patch)) return;
-      const next = { ...current, ...patch };
-      dragStateRef.current = next;
-      setDragState(next);
-    };
-
-    const onUp = (e) => {
-      const current = dragStateRef.current;
-      if (current?.source === EXTERNAL_SOURCE && isOverScrollArea(e.clientX, e.clientY) && current.item?.id != null) {
-        onUpdateTaskRef.current?.(
-          current.item.id,
-          timeUpdatesForDrop(
-            dayStartRef.current,
-            current.previewStart ?? yToMinutes(e.clientY),
-            getItemDurationMinutes(current.item)
-          )
-        );
-        onHighlightItemRef.current?.(current.item.id);
-      }
-      setDragState(null);
-      dragStateRef.current = null;
-      onExternalDragEndRef.current?.();
-    };
-
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-  }, [externalDragId, autoScrollAt, isOverScrollArea, yToMinutes]);
-
-  useEffect(() => {
     if (!isBlockDragging) return undefined;
 
     const onMove = (e) => {
@@ -375,11 +290,7 @@ export default function DayTimeline({
     };
   }, [isBlockDragging, yToMinutes, autoScrollAt]);
 
-  const showPreview = Boolean(
-    dragState?.moved &&
-    dragState.item &&
-    (dragState.source !== EXTERNAL_SOURCE || dragState.overGrid)
-  );
+  const showPreview = Boolean(dragState?.moved && dragState.item);
 
   return (
     <div className={`day-timeline${dragState ? ' is-dragging' : ''}`}>
@@ -551,12 +462,11 @@ export default function DayTimeline({
 
             {showPreview && (() => {
               const previewItem = lanedItems.find((i) => i.id === dragState.item.id) || dragState.item;
-              const useFullWidth = dragState.source === EXTERNAL_SOURCE;
               const { left, width } = getLanedBlockBounds(
                 0,
                 colWidth || dayColumnRef.current?.clientWidth || 320,
-                useFullWidth ? 0 : (previewItem._lane || 0),
-                useFullWidth ? 1 : (previewItem._laneCount || 1)
+                previewItem._lane || 0,
+                previewItem._laneCount || 1
               );
               const dropTimes = timeUpdatesForDrop(
                 dayStart,
@@ -615,7 +525,7 @@ export default function DayTimeline({
           </div>
         )}
       </div>
-      <p className="day-timeline-hint">Double-click an empty slot to create · Drag a block or list item to schedule</p>
+      <p className="day-timeline-hint">Double-click an empty slot to create · Drag a block to reschedule</p>
     </div>
   );
 }
