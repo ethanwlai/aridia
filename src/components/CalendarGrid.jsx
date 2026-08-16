@@ -17,7 +17,8 @@ window.globalDragState = window.globalDragState || {
 
 const hours = Array.from({ length: 24 }, (_, i) => i);
 const ROW_HEIGHT = 50;
-const MAX_START_MINUTES = 24 * 60 - 15;
+const SNAP_MINUTES = 5;
+const MAX_START_MINUTES = 24 * 60 - SNAP_MINUTES;
 
 function getHoveredCalendarCell(e) {
   if (e?.target?.closest) {
@@ -34,7 +35,7 @@ function getHoveredCalendarCell(e) {
 function snapStartFromPosition(position, clickOffsetY = 0) {
   const cursorMinutes = position.hour * 60 + position.minute;
   const offsetMinutes = (clickOffsetY / ROW_HEIGHT) * 60;
-  const clamped = Math.max(0, Math.min(MAX_START_MINUTES, snapMinutes(cursorMinutes - offsetMinutes)));
+  const clamped = Math.max(0, Math.min(MAX_START_MINUTES, snapMinutes(cursorMinutes - offsetMinutes, SNAP_MINUTES)));
   return {
     startMinutes: clamped,
     hour: Math.floor(clamped / 60),
@@ -43,7 +44,7 @@ function snapStartFromPosition(position, clickOffsetY = 0) {
 }
 
 function snapTotalMinutes(hour, minute) {
-  const snapped = snapMinutes(hour * 60 + minute);
+  const snapped = snapMinutes(hour * 60 + minute, SNAP_MINUTES);
   const clamped = Math.max(0, Math.min(MAX_START_MINUTES, snapped));
   return {
     hour: Math.floor(clamped / 60),
@@ -312,11 +313,11 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     // Calculate snapped minute based on click position within the cell
     const cellRect = cell.getBoundingClientRect();
     let minute = Math.round(((e.clientY - cellRect.top) / cellRect.height) * 60);
-    minute = Math.round(minute / 15) * 15;
-    if (minute === 60) minute = 0;
+    const snapped = snapTotalMinutes(rowIdx, minute);
+    const hour = snapped.hour;
+    minute = snapped.minute;
 
     const day = days[colIdx];
-    const hour = rowIdx;
     const start = new Date(day);
     start.setHours(hour, minute, 0, 0);
     const end = new Date(start);

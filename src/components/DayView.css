@@ -163,7 +163,6 @@
   opacity: 0.55;
   pointer-events: none;
   z-index: 4;
-  border: 2px dashed #fff;
   box-sizing: border-box;
   overflow: hidden;
   padding: 6px 8px;

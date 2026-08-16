@@ -5,6 +5,7 @@ import ShortBlockLabel from './ShortBlockLabel';
 import StackedBlockLabel from './StackedBlockLabel';
 import {
   assignOverlapLanes,
+  formatDateKey,
   formatShortTimeRange,
   getDayBlockHeightPx,
   getItemColor,
@@ -76,8 +77,11 @@ export default function DayTimeline({
   onExternalDragEndRef.current = onExternalDragEnd;
   const onHighlightItemRef = useRef(onHighlightItem);
   onHighlightItemRef.current = onHighlightItem;
+  const externalDragItemRef = useRef(externalDragItem);
+  externalDragItemRef.current = externalDragItem;
 
-  const dayStart = startOfDay(day);
+  const dayKey = formatDateKey(day);
+  const dayStart = useMemo(() => startOfDay(day), [dayKey]);
   const isToday = isSameDate(dayStart, startOfDay(new Date()));
   const timedItems = useMemo(
     () => items.filter((item) => item.startTime && item.endTime),
@@ -238,10 +242,11 @@ export default function DayTimeline({
   }, []);
 
   useLayoutEffect(() => {
-    if (!externalDragItem) return undefined;
+    const item = externalDragItemRef.current;
+    if (item == null || item.id == null) return undefined;
 
     const initial = {
-      item: externalDragItem,
+      item,
       source: 'agenda',
       clickOffsetY: 0,
       previewTop: 0,
@@ -291,7 +296,7 @@ export default function DayTimeline({
       setDragState((prev) => (prev?.source === 'agenda' ? null : prev));
     };
   }, [
-    externalDragItem,
+    externalDragItem?.id,
     autoScrollAt,
     isOverScrollArea,
     yToMinutes,

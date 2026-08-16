@@ -81,6 +81,56 @@ const DayView = ({
   }, []);
 
   useEffect(() => {
+    const clearSidebarDragFlags = (clearTask = false) => {
+      const drag = window.globalDragState;
+      if (!drag) return;
+      drag.startCustomDrag = false;
+      drag.startX = null;
+      drag.startY = null;
+      if (clearTask) drag.currentTask = null;
+    };
+
+    const onMove = (e) => {
+      const drag = window.globalDragState;
+      if (!drag?.startCustomDrag || !drag.currentTask) return;
+      if (agendaDragRef.current?.active) return;
+
+      const startX = drag.startX || 0;
+      const startY = drag.startY || 0;
+      if (Math.hypot(e.clientX - startX, e.clientY - startY) < DRAG_THRESHOLD) return;
+
+      const item = drag.currentTask;
+      clearSidebarDragFlags(false);
+
+      if (window.openDropdownRef?.current) {
+        window.openDropdownRef.current.setIsOpen(false);
+        window.openDropdownRef.current.setActiveSubmenu(null);
+        window.openDropdownRef.current = null;
+      }
+
+      setAgendaDrag({
+        item,
+        startX,
+        startY,
+        active: true,
+      });
+    };
+
+    const onUp = () => {
+      if (window.globalDragState?.startCustomDrag) {
+        clearSidebarDragFlags(true);
+      }
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!agendaDrag) return undefined;
 
     const onMove = (e) => {
