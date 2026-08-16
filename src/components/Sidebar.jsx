@@ -582,17 +582,14 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
                         }}
 
                         onMouseDown={(e) => {
-                          if (task.type === 'task') {
-                            // Start custom drag for sidebar tasks
-                            e.preventDefault();
-                            e.stopPropagation();
-                            
-                            // Set global state to indicate custom drag should start
-                            window.globalDragState.currentTask = task;
-                            window.globalDragState.startCustomDrag = true;
-                            window.globalDragState.startX = e.clientX;
-                            window.globalDragState.startY = e.clientY;
-                          }
+                          // Start custom drag for sidebar tasks and events
+                          e.preventDefault();
+                          e.stopPropagation();
+                          
+                          window.globalDragState.currentTask = task;
+                          window.globalDragState.startCustomDrag = true;
+                          window.globalDragState.startX = e.clientX;
+                          window.globalDragState.startY = e.clientY;
                         }}
                         onMouseEnter={(e) => {
                           const deleteBtn = e.currentTarget.querySelector('.task-delete-btn');
