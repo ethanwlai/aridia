@@ -1128,6 +1128,8 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                   onAutoSchedule={handleAutoSchedule}
                   onQuickMove={handleQuickMove}
                   onExtendDuration={handleExtendDuration}
+                  highlightedItem={highlightedItem}
+                  onHighlightItem={setHighlightedItem}
                 />
               )}
               {(viewMode === 'month' || viewMode === 'year') && (

@@ -5,7 +5,7 @@ import TaskCreationCard from './TaskCreationCard';
 import TaskActionsDropdown from './TaskActionsDropdown';
 import ShortBlockLabel from './ShortBlockLabel';
 import StackedBlockLabel from './StackedBlockLabel';
-import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK, getItemColor, snapMinutes, getItemDurationMinutes, formatMinutes } from '../utils/calendarItems';
+import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK, getItemColor, snapMinutes, getItemDurationMinutes, formatMinutes, toggleCalendarHighlight, getCalendarHighlightOpacity } from '../utils/calendarItems';
 
 // Global drag state to bypass getData() limitations
 window.globalDragState = window.globalDragState || { 
@@ -1683,16 +1683,9 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
               
               // Add visual feedback for highlighted blocks
               const isHighlighted = activeBlockKey === blockKey;
-              
-              // Also consider highlightedItem from sidebar
-              const isHighlightedFromSidebar = highlightedItem && 
-                highlightedItem.id === taskId && 
-                highlightedItem.type === (block._group ? block.tasks[0].type : block.type);
-              
-              if (isHighlightedFromSidebar) {
-                customOpacity = 1; // Keep highlighted items fully opaque
-              } else if (highlightedItem && !isHighlightedFromSidebar) {
-                customOpacity = 0.2; // Dim non-highlighted items when sidebar item is highlighted
+              const highlightSource = block._group ? block.tasks[0] : block;
+              if (highlightedItem) {
+                customOpacity = getCalendarHighlightOpacity(highlightedItem, highlightSource);
               }
               
 
@@ -1763,20 +1756,11 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                     e.preventDefault();
                     e.stopPropagation();
                     
-                    // Handle highlighting for sidebar cross-highlighting
-                    if (onHighlightItem) {
-                      const taskId = block._group ? block.tasks[0].id : block.id;
-                      const taskType = block._group ? block.tasks[0].type : block.type;
-                      const isCurrentlyHighlighted = highlightedItem && highlightedItem.id === taskId && highlightedItem.type === taskType;
-                      
-                      if (isCurrentlyHighlighted) {
-                        // Toggle off highlighting
-                        onHighlightItem(null);
-                      } else {
-                        // Toggle on highlighting
-                        onHighlightItem({ id: taskId, type: taskType });
-                      }
-                    }
+                    toggleCalendarHighlight(
+                      highlightedItem,
+                      onHighlightItem,
+                      block._group ? block.tasks[0] : block
+                    );
                     
                     // Check if this block was already highlighted (second click)
                     if (activeBlockKey === blockKey) {

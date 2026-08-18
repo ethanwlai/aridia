@@ -25,13 +25,14 @@ const DayView = ({
   onAutoSchedule,
   onQuickMove,
   onExtendDuration,
+  highlightedItem = null,
+  onHighlightItem,
 }) => {
   const selectedDate = startOfDay(centerDay || new Date());
   const today = startOfDay(new Date());
   const isToday = isSameDate(selectedDate, today);
   const dateKey = formatDateKey(selectedDate);
 
-  const [highlightedId, setHighlightedId] = useState(null);
   const [scrollToId, setScrollToId] = useState(null);
   const [agendaDrag, setAgendaDrag] = useState(null);
   const agendaDragRef = useRef(null);
@@ -54,13 +55,6 @@ const DayView = ({
   const goPrev = () => setCenterDay?.(addDays(selectedDate, -1));
   const goNext = () => setCenterDay?.(addDays(selectedDate, 1));
   const goToday = () => setCenterDay?.(today);
-
-  const handleSelectItem = useCallback((item) => {
-    setHighlightedId(item.id);
-    if (item.startTime && item.endTime) {
-      setScrollToId(`${item.id}:${Date.now()}`);
-    }
-  }, []);
 
   const handleAgendaPointerDragStart = useCallback((item, e) => {
     if (window.openDropdownRef?.current) {
@@ -191,8 +185,8 @@ const DayView = ({
         <DayTimeline
           day={selectedDate}
           items={dayItems}
-          highlightedId={highlightedId}
-          onHighlightItem={setHighlightedId}
+          highlightedItem={highlightedItem}
+          onHighlightItem={onHighlightItem}
           onAdd={onAdd}
           onUpdateTask={onUpdateTask}
           onDelete={onDelete}
@@ -209,11 +203,10 @@ const DayView = ({
           day={selectedDate}
           scheduled={scheduled}
           unscheduled={unscheduled}
-          highlightedId={highlightedId}
+          highlightedItem={highlightedItem}
+          onHighlightItem={onHighlightItem}
           draggingId={draggingId}
           isDragging={isAgendaDragging}
-          onSelectItem={handleSelectItem}
-          onPointerDragStart={handleAgendaPointerDragStart}
           onAdd={onAdd}
           onEdit={onEdit}
           onDelete={onDelete}
