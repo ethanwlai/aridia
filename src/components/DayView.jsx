@@ -25,13 +25,14 @@ const DayView = ({
   onAutoSchedule,
   onQuickMove,
   onExtendDuration,
+  highlightedItem = null,
+  onHighlightItem,
 }) => {
   const selectedDate = startOfDay(centerDay || new Date());
   const today = startOfDay(new Date());
   const isToday = isSameDate(selectedDate, today);
   const dateKey = formatDateKey(selectedDate);
 
-  const [highlightedId, setHighlightedId] = useState(null);
   const [scrollToId, setScrollToId] = useState(null);
   const [agendaDrag, setAgendaDrag] = useState(null);
   const agendaDragRef = useRef(null);
@@ -55,13 +56,6 @@ const DayView = ({
   const goNext = () => setCenterDay?.(addDays(selectedDate, 1));
   const goToday = () => setCenterDay?.(today);
 
-  const handleSelectItem = useCallback((item) => {
-    setHighlightedId(item.id);
-    if (item.startTime && item.endTime) {
-      setScrollToId(`${item.id}:${Date.now()}`);
-    }
-  }, []);
-
   const handleAgendaPointerDragStart = useCallback((item, e) => {
     if (window.openDropdownRef?.current) {
       window.openDropdownRef.current.setIsOpen(false);
@@ -78,6 +72,56 @@ const DayView = ({
 
   const handleExternalDragEnd = useCallback(() => {
     setAgendaDrag(null);
+  }, []);
+
+  useEffect(() => {
+    const clearSidebarDragFlags = (clearTask = false) => {
+      const drag = window.globalDragState;
+      if (!drag) return;
+      drag.startCustomDrag = false;
+      drag.startX = null;
+      drag.startY = null;
+      if (clearTask) drag.currentTask = null;
+    };
+
+    const onMove = (e) => {
+      const drag = window.globalDragState;
+      if (!drag?.startCustomDrag || !drag.currentTask) return;
+      if (agendaDragRef.current?.active) return;
+
+      const startX = drag.startX || 0;
+      const startY = drag.startY || 0;
+      if (Math.hypot(e.clientX - startX, e.clientY - startY) < DRAG_THRESHOLD) return;
+
+      const item = drag.currentTask;
+      clearSidebarDragFlags(false);
+
+      if (window.openDropdownRef?.current) {
+        window.openDropdownRef.current.setIsOpen(false);
+        window.openDropdownRef.current.setActiveSubmenu(null);
+        window.openDropdownRef.current = null;
+      }
+
+      setAgendaDrag({
+        item,
+        startX,
+        startY,
+        active: true,
+      });
+    };
+
+    const onUp = () => {
+      if (window.globalDragState?.startCustomDrag) {
+        clearSidebarDragFlags(true);
+      }
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
   }, []);
 
   useEffect(() => {
@@ -141,8 +185,8 @@ const DayView = ({
         <DayTimeline
           day={selectedDate}
           items={dayItems}
-          highlightedId={highlightedId}
-          onHighlightItem={setHighlightedId}
+          highlightedItem={highlightedItem}
+          onHighlightItem={onHighlightItem}
           onAdd={onAdd}
           onUpdateTask={onUpdateTask}
           onDelete={onDelete}
@@ -159,11 +203,10 @@ const DayView = ({
           day={selectedDate}
           scheduled={scheduled}
           unscheduled={unscheduled}
-          highlightedId={highlightedId}
+          highlightedItem={highlightedItem}
+          onHighlightItem={onHighlightItem}
           draggingId={draggingId}
           isDragging={isAgendaDragging}
-          onSelectItem={handleSelectItem}
-          onPointerDragStart={handleAgendaPointerDragStart}
           onAdd={onAdd}
           onEdit={onEdit}
           onDelete={onDelete}

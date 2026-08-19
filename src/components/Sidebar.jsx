@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import styles from './Sidebar.module.css';
 import { format, isToday } from 'date-fns';
 import Header from './Header';
+import AccountMenu from './AccountMenu';
 import TaskActionsDropdown from './TaskActionsDropdown';
 
 import { getItemColor } from '../utils/calendarItems';
@@ -445,6 +446,7 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
 
   return (
     <div className={styles.sidebar}>
+      <AccountMenu />
       <Header />
       <div className={styles.sidebarContent} ref={sidebarContentRef}>
         {allTaskDates.map((date, index) => {

@@ -163,7 +163,6 @@
   opacity: 0.55;
   pointer-events: none;
   z-index: 4;
-  border: 2px dashed #fff;
   box-sizing: border-box;
   overflow: hidden;
   padding: 6px 8px;
@@ -332,18 +331,13 @@
   border-radius: 10px;
   padding: 10px;
   margin-bottom: 8px;
-  cursor: grab;
+  cursor: pointer;
   user-select: none;
   transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s;
 }
 
 .day-agenda-row:hover {
   border-color: #cbb6f0;
-}
-
-.day-agenda-row.is-active {
-  border-color: #1d4ed8;
-  box-shadow: 0 0 0 1px #1d4ed8;
 }
 
 .day-agenda-row.is-completed {
@@ -355,11 +349,6 @@
   cursor: grabbing;
   background: #fff;
   border-style: dashed;
-  border-color: #cbb6f0;
-  box-shadow: none;
-}
-
-.day-agenda-row.is-dragging.is-active {
   border-color: #cbb6f0;
   box-shadow: none;
 }
@@ -438,6 +427,7 @@
   gap: 2px;
   flex-shrink: 0;
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .day-agenda-icon-btn {
@@ -478,6 +468,11 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
+}
+
+body.day-agenda-create-open .calendar-header > div:has(> .calendar-search) {
+  z-index: 0 !important;
+  pointer-events: none !important;
 }
 
 .day-agenda-create-card {

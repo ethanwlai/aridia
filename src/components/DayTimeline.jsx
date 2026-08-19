@@ -5,7 +5,9 @@ import ShortBlockLabel from './ShortBlockLabel';
 import StackedBlockLabel from './StackedBlockLabel';
 import {
   assignOverlapLanes,
+  formatDateKey,
   formatShortTimeRange,
+  getCalendarHighlightOpacity,
   getDayBlockHeightPx,
   getItemColor,
   getItemDurationMinutes,
@@ -17,6 +19,7 @@ import {
   snapMinutes,
   startOfDay,
   timeUpdatesForDrop,
+  toggleCalendarHighlight,
 } from '../utils/calendarItems';
 
 const ROW_HEIGHT = 50;
@@ -44,7 +47,7 @@ function previewHeightFor(item) {
 export default function DayTimeline({
   day,
   items = [],
-  highlightedId = null,
+  highlightedItem = null,
   onHighlightItem,
   onAdd,
   onUpdateTask,
@@ -76,8 +79,11 @@ export default function DayTimeline({
   onExternalDragEndRef.current = onExternalDragEnd;
   const onHighlightItemRef = useRef(onHighlightItem);
   onHighlightItemRef.current = onHighlightItem;
+  const externalDragItemRef = useRef(externalDragItem);
+  externalDragItemRef.current = externalDragItem;
 
-  const dayStart = startOfDay(day);
+  const dayKey = formatDateKey(day);
+  const dayStart = useMemo(() => startOfDay(day), [dayKey]);
   const isToday = isSameDate(dayStart, startOfDay(new Date()));
   const timedItems = useMemo(
     () => items.filter((item) => item.startTime && item.endTime),
@@ -189,7 +195,7 @@ export default function DayTimeline({
     e.preventDefault();
     e.stopPropagation();
     setActiveId(item.id);
-    onHighlightItem?.(item.id);
+    toggleCalendarHighlight(highlightedItem, onHighlightItem, item);
 
     if (window.openDropdownRef?.current) {
       window.openDropdownRef.current.setIsOpen(false);
@@ -238,10 +244,11 @@ export default function DayTimeline({
   }, []);
 
   useLayoutEffect(() => {
-    if (!externalDragItem) return undefined;
+    const item = externalDragItemRef.current;
+    if (item == null || item.id == null) return undefined;
 
     const initial = {
-      item: externalDragItem,
+      item,
       source: 'agenda',
       clickOffsetY: 0,
       previewTop: 0,
@@ -278,7 +285,7 @@ export default function DayTimeline({
           current.item.id,
           timeUpdatesForDrop(dayStart, current.previewStart ?? yToMinutes(e.clientY), getItemDurationMinutes(current.item))
         );
-        onHighlightItemRef.current?.(current.item.id);
+        onHighlightItemRef.current?.({ id: current.item.id, type: current.item.type });
       }
       onExternalDragEndRef.current?.();
     };
@@ -291,7 +298,7 @@ export default function DayTimeline({
       setDragState((prev) => (prev?.source === 'agenda' ? null : prev));
     };
   }, [
-    externalDragItem,
+    externalDragItem?.id,
     autoScrollAt,
     isOverScrollArea,
     yToMinutes,
@@ -381,8 +388,8 @@ export default function DayTimeline({
               const top = isDragging && dragState.source !== 'agenda' ? dragState.previewTop : geo.top;
               const height = geo.height;
               const color = getItemColor(item);
-              const isActive = !isDragging && (activeId === item.id || highlightedId === item.id);
               const completed = item.status === 'completed';
+              const highlightOpacity = getCalendarHighlightOpacity(highlightedItem, item);
               const { left, width } = getLanedBlockBounds(
                 0,
                 colWidth || dayColumnRef.current?.clientWidth || 320,
@@ -394,14 +401,14 @@ export default function DayTimeline({
                 <div
                   key={item.id}
                   data-day-block-id={item.id}
-                  className={`day-time-block${isActive ? ' is-active' : ''}${completed ? ' is-completed' : ''}${isDragging ? ' is-dragging' : ''}${height < SHORT_BLOCK.dayInlineBelow ? ' is-short' : ''}`}
+                  className={`day-time-block${completed ? ' is-completed' : ''}${isDragging ? ' is-dragging' : ''}${height < SHORT_BLOCK.dayInlineBelow ? ' is-short' : ''}`}
                   style={{
                     top,
                     left,
                     width,
                     height,
                     background: color,
-                    opacity: isDragging ? 0.85 : completed ? 0.55 : 1,
+                    opacity: isDragging ? 0.85 : highlightOpacity,
                   }}
                   onMouseDown={(e) => handleBlockMouseDown(e, item)}
                   onMouseEnter={(e) => {

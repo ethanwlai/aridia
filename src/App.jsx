@@ -11,8 +11,25 @@ import YearView from './components/YearView';
 import MonthView from './components/MonthView';
 import DayDetailPanel from './components/DayDetailPanel';
 import TaskCreationCard from './components/TaskCreationCard';
+import CalendarConflictModal from './components/CalendarConflictModal';
+import './components/CalendarConflictModal.css';
+import { useAuth } from './context/AuthContext';
 import { sortTasks } from './utils/taskSorter';
 import { startOfDay } from './utils/calendarItems';
+import {
+  PENDING_AUTH_KEY,
+  clearLocalTasks,
+  deleteCloudItem,
+  fetchCloudItems,
+  insertCloudItem,
+  isUuid,
+  loadLocalTasks,
+  newItemId,
+  replaceCloudWithLocal,
+  saveLocalTasks,
+  updateCloudItem,
+  uploadLocalItems,
+} from './lib/items';
 import './index.css';
 
 const formatTime = (totalMinutes) => {
@@ -28,18 +45,40 @@ const formatDate = (date) => {
   return `${y}-${m}-${d}`;
 };
 
+const ITEM_ACTION_SELECTOR = [
+  '.task-complete-btn',
+  '.task-delete-btn',
+  '.task-edit-btn',
+  '.task-actions-dropdown-trigger',
+  '.task-actions-dropdown-menu',
+  '.day-agenda-row-actions',
+].join(', ');
+
+const ITEM_SELECTION_SELECTOR = [
+  '.calendar-time-block',
+  '.day-time-block',
+  '.day-agenda-row',
+  '[data-task-id]',
+].join(', ');
+
+function isItemSelectionTarget(target) {
+  if (!(target instanceof Element)) return false;
+  if (target.closest(ITEM_ACTION_SELECTOR)) return false;
+  return Boolean(target.closest(ITEM_SELECTION_SELECTOR));
+}
+
 const App = () => {
-  const [tasks, setTasks] = useState(() => {
-    const saved = localStorage.getItem('aridia-tasks');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  });
+  const { user, loading: authLoading } = useAuth();
+  const userId = user?.id ?? null;
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
+
+  const [tasks, setTasks] = useState([]);
+  const [hydratedUserId, setHydratedUserId] = useState(undefined);
+  const [syncError, setSyncError] = useState('');
+  const [conflict, setConflict] = useState(null);
+  const [conflictBusy, setConflictBusy] = useState(false);
+  const tasksReady = !authLoading && hydratedUserId === userId;
   const [motivation, setMotivation] = useState(3);
   const [viewMode, setViewMode] = useState('week');
   const [chevronHover, setChevronHover] = useState(false);
@@ -77,15 +116,85 @@ const App = () => {
   const closeEditDatePickerRef = useRef(null);
   const closeEditTimePickerRef = useRef(null);
 
-  // Save tasks to localStorage whenever they change
+  const reportSyncError = useCallback((err) => {
+    console.error(err);
+    setSyncError(err?.message || 'Could not save to your account.');
+  }, []);
+
   useEffect(() => {
-    localStorage.setItem('aridia-tasks', JSON.stringify(tasks));
-  }, [tasks]);
+    if (authLoading) return undefined;
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      if (cancelled) return;
+      setSyncError('');
+      try {
+        if (!userId) {
+          setConflict(null);
+          setTasks(loadLocalTasks());
+          setHydratedUserId(null);
+          return;
+        }
+
+        const pending = sessionStorage.getItem(PENDING_AUTH_KEY);
+        const cloud = await fetchCloudItems();
+        if (cancelled) return;
+        const local = loadLocalTasks();
+
+        if (!pending) {
+          setTasks(cloud);
+          setHydratedUserId(userId);
+          return;
+        }
+
+        if (cloud.length === 0) {
+          if (local.length > 0) {
+            const uploaded = await uploadLocalItems(local, userId);
+            if (cancelled) return;
+            clearLocalTasks();
+            setTasks(uploaded);
+          } else {
+            setTasks([]);
+          }
+          sessionStorage.removeItem(PENDING_AUTH_KEY);
+          setHydratedUserId(userId);
+          return;
+        }
+
+        if (local.length === 0) {
+          setTasks(cloud);
+          sessionStorage.removeItem(PENDING_AUTH_KEY);
+          setHydratedUserId(userId);
+          return;
+        }
+
+        setTasks(cloud);
+        setConflict({ localItems: local, cloudItems: cloud });
+        sessionStorage.removeItem(PENDING_AUTH_KEY);
+        setHydratedUserId(userId);
+      } catch (err) {
+        if (cancelled) return;
+        reportSyncError(err);
+        setTasks(userId ? [] : loadLocalTasks());
+        setHydratedUserId(userId);
+      }
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [userId, authLoading, reportSyncError]);
+
+  useEffect(() => {
+    if (!tasksReady || userId) return;
+    saveLocalTasks(tasks);
+  }, [tasks, tasksReady, userId]);
 
   const addTask = (task) => {
     const safeTask = {
       ...task,
-      id: task.id || (Date.now() + Math.random()), // Ensure unique ID even for rapid task creation
+      id: isUuid(task.id) ? task.id : newItemId(),
       title: task.title || task.name || 'Untitled',
       energy: Number(task.energy) || 1,
       priority: Number(task.priority) || 1,
@@ -95,33 +204,70 @@ const App = () => {
       status: 'active',
     };
     setTasks((prev) => [...prev, safeTask]);
+    if (userIdRef.current) {
+      insertCloudItem(safeTask, userIdRef.current).catch(reportSyncError);
+    }
   };
 
   const deleteTask = (taskId) => {
     setTasks((prev) => prev.filter(task => task.id !== taskId));
+    if (userIdRef.current) {
+      deleteCloudItem(taskId).catch(reportSyncError);
+    }
   };
 
   const updateTaskStatus = (taskId, status) => {
-    setTasks((prev) => prev.map(task => 
+    const current = tasks.find(task => task.id === taskId);
+    setTasks((prev) => prev.map(task =>
       task.id === taskId ? { ...task, status } : task
     ));
+    if (userIdRef.current && current) {
+      updateCloudItem({ ...current, status }, userIdRef.current).catch(reportSyncError);
+    }
   };
 
   const updateTask = (taskId, updates) => {
+    const current = tasks.find(task => task.id === taskId);
+    const merged = current
+      ? (updates.startTime && updates.endTime
+        ? { ...current, ...updates, time: `${updates.startTime} – ${updates.endTime}` }
+        : { ...current, ...updates })
+      : null;
     setTasks((prev) => prev.map(task => {
       if (task.id === taskId) {
-        // If startTime and endTime are being updated, also update the time property
         if (updates.startTime && updates.endTime) {
-          return { 
-            ...task, 
-            ...updates, 
-            time: `${updates.startTime} – ${updates.endTime}` 
+          return {
+            ...task,
+            ...updates,
+            time: `${updates.startTime} – ${updates.endTime}`
           };
         }
         return { ...task, ...updates };
       }
       return task;
     }));
+    if (userIdRef.current && merged) {
+      updateCloudItem(merged, userIdRef.current).catch(reportSyncError);
+    }
+  };
+
+  const handleKeepCloud = () => {
+    setConflict(null);
+  };
+
+  const handleUseLocalCalendar = async () => {
+    if (!conflict || !userId) return;
+    setConflictBusy(true);
+    try {
+      const uploaded = await replaceCloudWithLocal(conflict.localItems, userId);
+      clearLocalTasks();
+      setTasks(uploaded);
+      setConflict(null);
+    } catch (err) {
+      reportSyncError(err);
+    } finally {
+      setConflictBusy(false);
+    }
   };
 
   // Handle edit task from TaskList
@@ -336,19 +482,31 @@ const App = () => {
 
   const handleSetViewMode = useCallback((mode) => {
     setPanelDate(null);
+    setHighlightedItem(null);
     setViewMode(mode);
   }, []);
 
   const openDayView = useCallback((date) => {
     setPanelDate(null);
+    setHighlightedItem(null);
     setCenterDay(startOfDay(date));
     setViewMode('day');
   }, []);
 
   const openMonthView = useCallback((date) => {
     setPanelDate(null);
+    setHighlightedItem(null);
     setCenterDay(startOfDay(date));
     setViewMode('month');
+  }, []);
+
+  useEffect(() => {
+    const handlePointerDown = (e) => {
+      if (isItemSelectionTarget(e.target)) return;
+      setHighlightedItem(null);
+    };
+    document.addEventListener('mousedown', handlePointerDown, true);
+    return () => document.removeEventListener('mousedown', handlePointerDown, true);
   }, []);
 
   // Quick move: Move task/event to different date (preserves time)
@@ -676,6 +834,12 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
   return (
     <>
       <div className="frame-box">
+        {syncError && (
+          <div className="sync-banner" role="status">{syncError}</div>
+        )}
+        {!tasksReady && (
+          <div className="app-loading-mask">Loading calendar…</div>
+        )}
         <div className="app-wrapper">
           <div
             className="main-layout"
@@ -1128,6 +1292,8 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                   onAutoSchedule={handleAutoSchedule}
                   onQuickMove={handleQuickMove}
                   onExtendDuration={handleExtendDuration}
+                  highlightedItem={highlightedItem}
+                  onHighlightItem={setHighlightedItem}
                 />
               )}
               {(viewMode === 'month' || viewMode === 'year') && (
@@ -1223,6 +1389,15 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
             }}
           />
         </div>
+      )}
+      {conflict && (
+        <CalendarConflictModal
+          localCount={conflict.localItems.length}
+          cloudCount={conflict.cloudItems.length}
+          onKeepCloud={handleKeepCloud}
+          onUseLocal={handleUseLocalCalendar}
+          busy={conflictBusy}
+        />
       )}
     </>
   );

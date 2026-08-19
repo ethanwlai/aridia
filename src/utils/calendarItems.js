@@ -289,3 +289,25 @@ export function getLanedBlockBounds(colLeft, colWidth, lane = 0, laneCount = 1, 
   const width = Math.max(8, laneWidth - laneGap);
   return { left, width };
 }
+
+/** Week View calendar highlight: match by id + type. */
+export function isCalendarHighlighted(highlightedItem, item) {
+  if (!highlightedItem || item == null) return false;
+  return highlightedItem.id === item.id && highlightedItem.type === item.type;
+}
+
+/** Toggle App-level highlightedItem the same way Week calendar blocks do. */
+export function toggleCalendarHighlight(highlightedItem, onHighlightItem, item) {
+  if (!onHighlightItem || item == null) return;
+  if (isCalendarHighlighted(highlightedItem, item)) {
+    onHighlightItem(null);
+  } else {
+    onHighlightItem({ id: item.id, type: item.type });
+  }
+}
+
+/** Opacity 1 for the highlighted item (or when none), 0.2 for the rest. */
+export function getCalendarHighlightOpacity(highlightedItem, item) {
+  if (!highlightedItem) return 1;
+  return isCalendarHighlighted(highlightedItem, item) ? 1 : 0.2;
+}

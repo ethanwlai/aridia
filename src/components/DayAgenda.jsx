@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import TaskCreationCard from './TaskCreationCard';
 import TaskActionsDropdown from './TaskActionsDropdown';
 import {
   formatItemTime,
+  getCalendarHighlightOpacity,
   getItemColor,
   getItemTitle,
   startOfDay,
+  toggleCalendarHighlight,
 } from '../utils/calendarItems';
 
 function PriorityLabel({ priority }) {
@@ -16,20 +18,11 @@ function PriorityLabel({ priority }) {
   return null;
 }
 
-function isAgendaActionTarget(target) {
-  return Boolean(
-    target.closest('.day-agenda-row-actions') ||
-    target.closest('.task-actions-dropdown-trigger') ||
-    target.closest('.task-actions-dropdown-menu')
-  );
-}
-
 function AgendaRow({
   item,
-  isActive,
   isDragging,
-  onSelect,
-  onPointerDragStart,
+  highlightedItem,
+  onHighlightItem,
   onEdit,
   onDelete,
   onUpdateStatus,
@@ -40,18 +33,12 @@ function AgendaRow({
   const completed = item.status === 'completed';
   return (
     <div
-      className={`day-agenda-row${isActive ? ' is-active' : ''}${completed ? ' is-completed' : ''}${isDragging ? ' is-dragging' : ''}`}
+      className={`day-agenda-row${completed ? ' is-completed' : ''}${isDragging ? ' is-dragging' : ''}`}
       draggable={false}
-      onMouseDown={(e) => {
-        if (e.button !== 0) return;
-        if (isAgendaActionTarget(e.target)) return;
-        e.preventDefault();
-        e.stopPropagation();
-        onPointerDragStart?.(item, e);
-      }}
-      onClick={() => {
-        if (isDragging) return;
-        onSelect?.(item);
+      style={{ opacity: getCalendarHighlightOpacity(highlightedItem, item) }}
+      onClick={(e) => {
+        if (e.target.closest('.day-agenda-row-actions')) return;
+        toggleCalendarHighlight(highlightedItem, onHighlightItem, item);
       }}
     >
       <span className="day-agenda-swatch" style={{ background: getItemColor(item) }} />
@@ -115,11 +102,10 @@ export default function DayAgenda({
   day,
   scheduled = [],
   unscheduled = [],
-  highlightedId = null,
+  highlightedItem = null,
+  onHighlightItem,
   draggingId = null,
   isDragging = false,
-  onSelectItem,
-  onPointerDragStart,
   onAdd,
   onEdit,
   onDelete,
@@ -131,6 +117,21 @@ export default function DayAgenda({
   const [showCreate, setShowCreate] = useState(false);
   const dayStart = startOfDay(day);
 
+  useEffect(() => {
+    if (!showCreate) return undefined;
+    document.body.classList.add('day-agenda-create-open');
+    const blurSearch = () => {
+      const el = document.querySelector('.calendar-search');
+      if (el && document.activeElement === el) el.blur();
+    };
+    blurSearch();
+    const id = requestAnimationFrame(blurSearch);
+    return () => {
+      document.body.classList.remove('day-agenda-create-open');
+      cancelAnimationFrame(id);
+    };
+  }, [showCreate]);
+
   const openCreate = () => {
     setShowCreate(true);
   };
@@ -139,10 +140,9 @@ export default function DayAgenda({
     <AgendaRow
       key={item.id}
       item={item}
-      isActive={highlightedId === item.id && !isDragging}
       isDragging={isDragging && draggingId === item.id}
-      onSelect={onSelectItem}
-      onPointerDragStart={onPointerDragStart}
+      highlightedItem={highlightedItem}
+      onHighlightItem={onHighlightItem}
       onEdit={onEdit}
       onDelete={onDelete}
       onUpdateStatus={onUpdateStatus}
