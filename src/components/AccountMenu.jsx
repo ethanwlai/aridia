@@ -20,16 +20,7 @@ export default function AccountMenu() {
     return () => document.removeEventListener('mousedown', onPointerDown);
   }, [open]);
 
-  if (loading) return null;
-
-  if (!user) {
-    return (
-      <div className="account-menu">
-        <Link className="account-menu-link" to="/login">Sign in</Link>
-        <Link className="account-menu-btn" to="/signup">Sign up</Link>
-      </div>
-    );
-  }
+  if (loading || !user) return null;
 
   const label = user.email || 'Account';
   const initial = (user.email || 'A').charAt(0).toUpperCase();

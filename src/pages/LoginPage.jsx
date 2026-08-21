@@ -93,7 +93,7 @@ export default function LoginPage() {
         <p className="auth-switch">
           Need an account? <Link to="/signup">Create one</Link>
         </p>
-        <Link className="auth-back" to="/">Back to calendar</Link>
+        <Link className="auth-back" to="/">Back</Link>
       </div>
     </div>
   );

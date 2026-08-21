@@ -121,7 +121,7 @@ export default function SignupPage() {
         <p className="auth-switch">
           Already have an account? <Link to="/login">Sign in</Link>
         </p>
-        <Link className="auth-back" to="/">Back to calendar</Link>
+        <Link className="auth-back" to="/">Back</Link>
       </div>
     </div>
   );

@@ -145,6 +145,7 @@
   z-index: 2;
   user-select: none;
   box-sizing: border-box;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .day-time-block.is-active {
@@ -333,7 +334,7 @@
   margin-bottom: 8px;
   cursor: pointer;
   user-select: none;
-  transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .day-agenda-row:hover {
