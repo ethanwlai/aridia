@@ -161,6 +161,30 @@ html, body {
   min-height: 80px; /* Ensure minimum height is maintained */
 }
 
+.calendar-brand-logo {
+  position: absolute;
+  left: 32px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.calendar-brand-logo img {
+  height: 44px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
 .calendar-title {
   font-size: 1.5rem;
   font-weight: 600;

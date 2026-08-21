@@ -1,9 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
+import aridiaLogo from '../assets/aridia-logo.png';
+import { requestShowLanding } from '../lib/guest';
 
 // ═══════════════════════════════════════════════════════════════
 // 🔧 ADJUSTABLE GAP SETTING - Change this number to adjust the gap!
 // ═══════════════════════════════════════════════════════════════
 const SEARCH_BAR_GAP = 20; // Gap between the rightmost button (Year) and the search bar (in pixels)
+const LOGO_HEIGHT = 44;
+const LOGO_WIDTH = Math.round(LOGO_HEIGHT * (286 / 138)); // native 286×138, keep aspect ratio
+const LOGO_LEFT_INSET = 32;
+const LOGO_BUTTON_GAP = 12;
+const MIN_BUTTON_LEFT_EDGE = LOGO_LEFT_INSET + LOGO_WIDTH + LOGO_BUTTON_GAP;
+const SEARCH_BAR_RIGHT_OFFSET = 24;
 // ═══════════════════════════════════════════════════════════════
 
 const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlightItem }) => {
@@ -18,7 +26,7 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
   const [showNoResults, setShowNoResults] = useState(false);
   const [buttonPosition, setButtonPosition] = useState({ left: '50%', transform: 'translateX(-50%)' });
   const [searchBarPosition, setSearchBarPosition] = useState({ 
-    right: '16px', 
+    right: `${SEARCH_BAR_RIGHT_OFFSET}px`, 
     left: 'auto',
     top: '50%',
     transform: 'translateY(-50%)'
@@ -310,7 +318,7 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
         gridCenterX = headerWidth / 2;
         gridRightEdge = headerWidth;
       }
-      const searchBarRightOffset = 24; // 24px gap from calendar grid right edge
+      const searchBarRightOffset = SEARCH_BAR_RIGHT_OFFSET; // 24px gap from calendar grid right edge
       // searchBarRightPosition is the right edge position relative to header left edge
       const searchBarRightPosition = gridRightEdge - searchBarRightOffset;
       
@@ -353,15 +361,18 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
           
           // Check if buttons fit
           let maxAllowedButtonRightEdge = searchBarRightPosition - SEARCH_BAR_GAP;
+          let minAllowedButtonLeftEdge = MIN_BUTTON_LEFT_EDGE;
           
           // Add hysteresis
           if (numButtons > lastVisibleButtonsRef.current) {
             maxAllowedButtonRightEdge -= hysteresisBuffer;
+            minAllowedButtonLeftEdge += hysteresisBuffer;
           } else if (numButtons < lastVisibleButtonsRef.current) {
             maxAllowedButtonRightEdge += hysteresisBuffer;
+            minAllowedButtonLeftEdge -= hysteresisBuffer;
           }
           
-          if (buttonGroupRightEdge <= maxAllowedButtonRightEdge) {
+          if (buttonGroupLeftEdge >= minAllowedButtonLeftEdge && buttonGroupRightEdge <= maxAllowedButtonRightEdge) {
             // This configuration fits! Use it
             bestFit = { numButtons, startIndex, endIndex };
             newVisibleButtons = numButtons;
@@ -474,15 +485,18 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
             
             // Buttons can use space up to searchBarRightPosition (no gap needed since search bar is gone)
             let maxAllowedButtonRightEdgeAfter = searchBarRightPosition;
+            let minAllowedButtonLeftEdgeAfter = MIN_BUTTON_LEFT_EDGE;
             
             // Add hysteresis
             if (numButtons > lastVisibleButtonsRef.current) {
               maxAllowedButtonRightEdgeAfter -= hysteresisBuffer;
+              minAllowedButtonLeftEdgeAfter += hysteresisBuffer;
             } else if (numButtons < lastVisibleButtonsRef.current) {
               maxAllowedButtonRightEdgeAfter += hysteresisBuffer;
+              minAllowedButtonLeftEdgeAfter -= hysteresisBuffer;
             }
             
-            if (buttonGroupRightEdge <= maxAllowedButtonRightEdgeAfter) {
+            if (buttonGroupLeftEdge >= minAllowedButtonLeftEdgeAfter && buttonGroupRightEdge <= maxAllowedButtonRightEdgeAfter) {
               bestFitAfter = { numButtons, startIndex, endIndex };
               newVisibleButtonsAfterSearchBarGone = numButtons;
               break;
@@ -670,6 +684,19 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
   
   return (
     <div className="calendar-header" ref={headerRef}>
+      <button
+        type="button"
+        className="calendar-brand-logo"
+        onClick={requestShowLanding}
+        aria-label="Go to Aridia home"
+      >
+        <img
+          src={aridiaLogo}
+          alt="Aridia"
+          width={LOGO_WIDTH}
+          height={LOGO_HEIGHT}
+        />
+      </button>
       {/* Button container - positioned absolutely to center over calendar grid */}
       {visibleButtons > 0 && (
         <div 

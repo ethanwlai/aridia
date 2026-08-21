@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { clearGuestSession } from '../lib/guest';
 import { clearPendingAuth, markPendingAuth } from '../lib/items';
 
 const AuthContext = createContext(null);
@@ -78,6 +79,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    clearGuestSession();
     if (!supabase) return;
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
