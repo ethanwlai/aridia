@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import TaskCreationCard from './TaskCreationCard';
+import TaskForm from './TaskForm';
 import TaskActionsDropdown from './TaskActionsDropdown';
 import {
   formatItemTime,
@@ -113,6 +114,9 @@ export default function DayAgenda({
   onAutoSchedule,
   onQuickMove,
   onExtendDuration,
+  createSession = null,
+  onCancelCreate,
+  onTimesChange,
 }) {
   const [showCreate, setShowCreate] = useState(false);
   const dayStart = startOfDay(day);
@@ -153,7 +157,22 @@ export default function DayAgenda({
   );
 
   return (
-    <aside className="day-agenda">
+    <aside className={`day-agenda${createSession ? ' is-creating' : ''}`}>
+      {createSession ? (
+        <div className="day-agenda-create-panel">
+          <TaskForm
+            variant="day"
+            addTask={onAdd}
+            defaultStartTime={createSession.start}
+            defaultEndTime={createSession.end}
+            defaultDeadline={dayStart}
+            onTimesChange={onTimesChange}
+            onCancel={onCancelCreate}
+          />
+        </div>
+      ) : (
+        <>
+      <div className="day-agenda-body">
       <div className="day-agenda-toolbar">
         <button type="button" className="day-agenda-add-btn" onClick={openCreate}>
           + Add
@@ -177,6 +196,7 @@ export default function DayAgenda({
           unscheduled.map(renderRow)
         )}
       </section>
+      </div>
 
       {showCreate && createPortal(
         <div className="day-agenda-create-overlay" onClick={() => setShowCreate(false)}>
@@ -204,6 +224,8 @@ export default function DayAgenda({
           </div>
         </div>,
         document.body
+      )}
+        </>
       )}
     </aside>
   );

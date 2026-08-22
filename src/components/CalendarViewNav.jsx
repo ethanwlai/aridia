@@ -1,6 +1,6 @@
 import './OverviewViews.css';
 
-export default function CalendarViewNav({ label, onPrev, onNext, onToday, prevLabel, nextLabel }) {
+export default function CalendarViewNav({ label, onPrev, onNext, onToday, prevLabel, nextLabel, children }) {
   return (
     <div className="calendar-nav-bar overview-nav-bar">
       <button
@@ -23,6 +23,7 @@ export default function CalendarViewNav({ label, onPrev, onNext, onToday, prevLa
           <polygon points="5,3 11,8 5,13" />
         </svg>
       </button>
+      {children}
       {label ? <span className="overview-nav-label">{label}</span> : null}
       {onToday ? (
         <button type="button" className="overview-today-btn" onClick={onToday}>

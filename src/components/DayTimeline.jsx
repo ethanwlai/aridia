@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import TaskCreationCard from './TaskCreationCard';
 import TaskActionsDropdown from './TaskActionsDropdown';
 import ShortBlockLabel from './ShortBlockLabel';
 import StackedBlockLabel from './StackedBlockLabel';
 import {
   assignOverlapLanes,
   formatDateKey,
+  formatMinutes,
   formatShortTimeRange,
   getCalendarHighlightOpacity,
   getDayBlockHeightPx,
@@ -27,6 +27,7 @@ const TIME_COL_WIDTH = 72;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const SCROLL_EDGE = 48;
 const SCROLL_BASE_SPEED = 14;
+const CREATE_DURATION_MINUTES = 30;
 
 function getBlockGeometry(item) {
   const start = parseTimeToMinutes(item.startTime);
@@ -49,7 +50,6 @@ export default function DayTimeline({
   items = [],
   highlightedItem = null,
   onHighlightItem,
-  onAdd,
   onUpdateTask,
   onDelete,
   onUpdateStatus,
@@ -60,17 +60,18 @@ export default function DayTimeline({
   scrollToId = null,
   externalDragItem = null,
   onExternalDragEnd,
+  createSession = null,
+  onCreateAt,
+  onCancelCreate,
 }) {
   const scrollRef = useRef(null);
-  const cardRef = useRef(null);
   const dayColumnRef = useRef(null);
-  const [cardPos, setCardPos] = useState(null);
-  const [cardKey, setCardKey] = useState(0);
   const [activeId, setActiveId] = useState(null);
   const [nowPos, setNowPos] = useState(null);
   const [dragState, setDragState] = useState(null);
   const [colWidth, setColWidth] = useState(0);
   const userHasScrolled = useRef(false);
+  const justDraggedRef = useRef(false);
   const dragStateRef = useRef(null);
   dragStateRef.current = dragState;
   const onUpdateTaskRef = useRef(onUpdateTask);
@@ -145,39 +146,25 @@ export default function DayTimeline({
     return Math.max(0, Math.min(24 * 60 - 15, minutes));
   }, []);
 
-  const openCreateAt = useCallback((clientX, clientY, startMinutes) => {
-    if (!scrollRef.current) return;
-    const scrollRect = scrollRef.current.getBoundingClientRect();
-    const start = new Date(dayStart);
-    start.setHours(0, startMinutes, 0, 0);
-    const end = new Date(start);
-    end.setMinutes(end.getMinutes() + 60);
+  const closeCreate = useCallback(() => {
+    onCancelCreate?.();
+  }, [onCancelCreate]);
 
-    const cardWidth = 420;
-    const cardHeight = 240;
-    let flippedX = false;
-    let flippedY = false;
-    const x = clientX - scrollRect.left;
-    let y = clientY - scrollRect.top + 24;
-    if (clientX + cardWidth > scrollRect.right) flippedX = true;
-    if (clientY + cardHeight > scrollRect.bottom) flippedY = true;
+  const markJustDragged = useCallback(() => {
+    justDraggedRef.current = true;
+    window.setTimeout(() => {
+      justDraggedRef.current = false;
+    }, 0);
+  }, []);
 
-    setCardKey((k) => k + 1);
-    setCardPos({
-      x,
-      y,
-      flippedX,
-      flippedY,
-      defaultStartTime: start,
-      defaultEndTime: end,
-      defaultDeadline: dayStart,
-    });
-  }, [dayStart]);
-
-  const handleColumnDoubleClick = (e) => {
-    if (e.target.closest('.day-time-block') || e.target.closest('.task-creation-card')) return;
-    const minutes = yToMinutes(e.clientY);
-    openCreateAt(e.clientX, e.clientY, minutes);
+  const handleColumnClick = (e) => {
+    if (e.target.closest('.day-time-block') || e.target.closest('.day-agenda')) return;
+    if (justDraggedRef.current) {
+      justDraggedRef.current = false;
+      return;
+    }
+    const minutes = Math.max(0, Math.min(24 * 60 - CREATE_DURATION_MINUTES, yToMinutes(e.clientY)));
+    onCreateAt?.(minutes);
   };
 
   const handleBlockMouseDown = (e, item) => {
@@ -189,11 +176,13 @@ export default function DayTimeline({
       e.target.closest('.task-actions-dropdown-menu')
     ) {
       e.stopPropagation();
+      closeCreate();
       return;
     }
 
     e.preventDefault();
     e.stopPropagation();
+    closeCreate();
     setActiveId(item.id);
     toggleCalendarHighlight(highlightedItem, onHighlightItem, item);
 
@@ -280,6 +269,7 @@ export default function DayTimeline({
       const current = dragStateRef.current;
       setDragState(null);
       dragStateRef.current = null;
+      if (current?.moved) markJustDragged();
       if (current?.source === 'agenda' && isOverScrollArea(e.clientX, e.clientY) && current.item?.id != null) {
         onUpdateTaskRef.current?.(
           current.item.id,
@@ -303,6 +293,7 @@ export default function DayTimeline({
     isOverScrollArea,
     yToMinutes,
     dayStart,
+    markJustDragged,
   ]);
 
   useEffect(() => {
@@ -325,6 +316,7 @@ export default function DayTimeline({
     const onUp = () => {
       const current = dragStateRef.current;
       setDragState(null);
+      if (current?.moved) markJustDragged();
       if (current?.source === 'block' && current.moved && current.item?.id != null) {
         onUpdateTaskRef.current?.(
           current.item.id,
@@ -345,7 +337,37 @@ export default function DayTimeline({
     yToMinutes,
     dayStart,
     autoScrollAt,
+    markJustDragged,
   ]);
+
+  useEffect(() => {
+    if (!createSession) return undefined;
+
+    const handleKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      closeCreate();
+    };
+
+    const handleMouseDown = (e) => {
+      if (e.target.closest('.day-agenda')) return;
+      if (document.querySelector('.aridia-datepicker-popper')?.contains(e.target)) return;
+      if (document.querySelector('.taskform-datepicker-popper')?.contains(e.target)) return;
+      if (document.querySelector('.react-datepicker-popper')?.contains(e.target)) return;
+      if (document.querySelector('.custom-time-picker-modal')?.contains(e.target)) return;
+      if (document.querySelector('.custom-duration-picker-modal')?.contains(e.target)) return;
+      if (e.target.closest('.day-timeline-daycol') && !e.target.closest('.day-time-block')) return;
+      closeCreate();
+    };
+
+    document.addEventListener('keydown', handleKey, true);
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => {
+      document.removeEventListener('keydown', handleKey, true);
+      document.removeEventListener('mousedown', handleMouseDown);
+    };
+  }, [createSession, closeCreate]);
 
   return (
     <div className={`day-timeline${dragState ? ' is-dragging' : ''}`}>
@@ -353,9 +375,6 @@ export default function DayTimeline({
         className="day-timeline-scroll"
         ref={scrollRef}
         onScroll={() => { userHasScrolled.current = true; }}
-        onClick={() => {
-          if (cardPos) setCardPos(null);
-        }}
       >
         <div className="day-timeline-grid" style={{ height: 24 * ROW_HEIGHT }}>
           <div className="day-timeline-hours" style={{ width: TIME_COL_WIDTH }}>
@@ -369,7 +388,7 @@ export default function DayTimeline({
           <div
             className="day-timeline-daycol"
             ref={dayColumnRef}
-            onDoubleClick={handleColumnDoubleClick}
+            onClick={handleColumnClick}
           >
             {HOURS.map((hour) => (
               <div key={hour} className="day-timeline-slot" style={{ height: ROW_HEIGHT }} />
@@ -411,6 +430,7 @@ export default function DayTimeline({
                     opacity: isDragging ? 0.85 : highlightOpacity,
                   }}
                   onMouseDown={(e) => handleBlockMouseDown(e, item)}
+                  onClick={(e) => e.stopPropagation()}
                   onMouseEnter={(e) => {
                     e.currentTarget.querySelectorAll('.day-block-action, .task-actions-dropdown-trigger').forEach((el) => {
                       el.style.opacity = '1';
@@ -446,7 +466,8 @@ export default function DayTimeline({
                         paddingRight: 72,
                       }}
                       timeStyle={{
-                        fontSize: '0.72rem',
+                        fontSize: '0.75rem',
+                        fontWeight: 500,
                         opacity: 0.92,
                       }}
                     />
@@ -515,6 +536,32 @@ export default function DayTimeline({
               );
             })}
 
+            {createSession && (() => {
+              const visibleEnd = Math.min(createSession.endMinutes, 24 * 60);
+              const duration = Math.max(15, visibleEnd - createSession.startMinutes);
+              const top = (createSession.startMinutes / 60) * ROW_HEIGHT;
+              const height = getDayBlockHeightPx(duration, ROW_HEIGHT);
+              const { left, width } = getLanedBlockBounds(
+                0,
+                colWidth || dayColumnRef.current?.clientWidth || 320,
+                0,
+                1
+              );
+              const endLabel = createSession.endMinutes >= 24 * 60
+                ? '00:00'
+                : formatMinutes(createSession.endMinutes);
+              return (
+                <div
+                  className={`day-time-block-draft${height < SHORT_BLOCK.dayInlineBelow ? ' is-short' : ''}`}
+                  style={{ top, left, width, height }}
+                >
+                  <div className="day-time-block-draft-time">
+                    {formatShortTimeRange(formatMinutes(createSession.startMinutes), endLabel)}
+                  </div>
+                </div>
+              );
+            })()}
+
             {dragState?.moved && dragState.item && (dragState.source !== 'agenda' || dragState.overGrid) && (() => {
               const previewItem = lanedItems.find((i) => i.id === dragState.item.id) || dragState.item;
               const useFullWidth = dragState.source === 'agenda';
@@ -551,37 +598,8 @@ export default function DayTimeline({
             })()}
           </div>
         </div>
-
-        {cardPos && (
-          <div
-            ref={cardRef}
-            style={{
-              position: 'absolute',
-              left: cardPos.flippedX ? cardPos.x - 430 : cardPos.x,
-              top: cardPos.y,
-              zIndex: 100,
-              transform: cardPos.flippedY ? 'translateY(-240px)' : 'none',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <TaskCreationCard
-              key={cardKey}
-              onCancel={() => setCardPos(null)}
-              onAdd={(task) => {
-                if (task.startTime && task.endTime && task.startTime === task.endTime) return;
-                onAdd?.(task);
-                setCardPos(null);
-              }}
-              flippedX={cardPos.flippedX}
-              flippedY={cardPos.flippedY}
-              defaultStartTime={cardPos.defaultStartTime}
-              defaultEndTime={cardPos.defaultEndTime}
-              defaultDeadline={cardPos.defaultDeadline}
-            />
-          </div>
-        )}
       </div>
-      <p className="day-timeline-hint">Double-click an empty slot to create · Drag a block or list item to schedule</p>
+      <p className="day-timeline-hint">Click an empty slot to create · Drag a block or list item to schedule</p>
     </div>
   );
 }

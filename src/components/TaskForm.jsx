@@ -728,7 +728,66 @@ const CircularTimePicker = ({ value, onChange, onClose, anchorRef, open, timePic
   return ReactDOM.createPortal(picker, document.body);
 };
 
-const DatePillsInput = forwardRef(({ value, onClick, isDatePickerOpen, onChange, placeholder, onBlur, hasError, onAutoComplete }, ref) => {
+const TASKFORM_THEMES = {
+  dashboard: {
+    cardBg: 'rgba(160, 132, 232, 0.1)',
+    cardBorder: '1px solid rgba(160, 132, 232, 0.2)',
+    cardShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+    text: 'white',
+    label: 'white',
+    muted: '#a084e8',
+    toggleBg: '#2e0066',
+    toggleBorder: '#a084e8',
+    toggleSelectedBg: 'linear-gradient(135deg, #a084e8 0%, #8b5cf6 100%)',
+    toggleSelectedText: 'white',
+    toggleUnselectedText: '#a084e8',
+    inputBg: '#2e0066',
+    inputText: 'white',
+    inputBorder: '#a084e8',
+    icon: '#a084e8',
+    timePillBg: 'rgba(108, 99, 255, 0.6)',
+    timePillText: '#fff',
+    timePillHover: '#ddd6fe',
+    timePillBorder: 'none',
+    trackUnused: '#4b5563',
+    cancelBorder: '#a084e8',
+    cancelText: 'white',
+    submitBg: '#a084e8',
+    submitHover: '#8b5cf6',
+    submitText: 'white',
+    placeholder: '#9ca3af',
+  },
+  day: {
+    cardBg: 'transparent',
+    cardBorder: 'none',
+    cardShadow: 'none',
+    text: '#2e0066',
+    label: '#2e0066',
+    muted: '#2e0066',
+    toggleBg: '#faf8ff',
+    toggleBorder: '#e1e1e1',
+    toggleSelectedBg: '#2e0066',
+    toggleSelectedText: '#fff',
+    toggleUnselectedText: '#2e0066',
+    inputBg: '#faf8ff',
+    inputText: '#2e0066',
+    inputBorder: '#e1e1e1',
+    icon: '#2e0066',
+    timePillBg: '#faf8ff',
+    timePillText: '#2e0066',
+    timePillHover: '#faf8ff',
+    timePillBorder: '1px solid #e1e1e1',
+    trackUnused: '#e1e1e1',
+    cancelBorder: '#e1e1e1',
+    cancelText: '#2e0066',
+    submitBg: '#2e0066',
+    submitHover: '#3d1a7a',
+    submitText: '#fff',
+    placeholder: '#999',
+  },
+};
+
+const DatePillsInput = forwardRef(({ value, onClick, isDatePickerOpen, onChange, placeholder, onBlur, hasError, onAutoComplete, palette = TASKFORM_THEMES.dashboard }, ref) => {
   const handleClick = (e) => {
     // Call the onClick prop that DatePicker expects
     if (onClick) {
@@ -768,9 +827,9 @@ const DatePillsInput = forwardRef(({ value, onClick, isDatePickerOpen, onChange,
           padding: '0.875rem',
           paddingRight: '2.5rem', // Space for calendar icon
           borderRadius: '8px',
-          border: hasError ? '2px solid #ff1744' : '1px solid #a084e8',
-          background: '#2e0066',
-          color: 'white',
+          border: hasError ? '2px solid #ff1744' : `1px solid ${palette.inputBorder}`,
+          background: palette.inputBg,
+          color: palette.inputText,
           fontSize: '0.9rem',
           fontFamily: 'inherit',
           fontWeight: 'inherit',
@@ -785,7 +844,7 @@ const DatePillsInput = forwardRef(({ value, onClick, isDatePickerOpen, onChange,
           left: '0.875rem',
           top: '50%',
           transform: 'translateY(-50%)',
-          color: '#9ca3af',
+          color: palette.placeholder,
           fontSize: '0.9rem',
           pointerEvents: 'none',
           fontFamily: 'inherit'
@@ -811,7 +870,7 @@ const DatePillsInput = forwardRef(({ value, onClick, isDatePickerOpen, onChange,
           border: 'none',
           cursor: 'pointer',
           padding: '0.25rem',
-          color: '#a084e8',
+          color: palette.icon,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'
@@ -827,14 +886,35 @@ const DatePillsInput = forwardRef(({ value, onClick, isDatePickerOpen, onChange,
 
 const ENERGY_LABELS = [null, 'Light', 'Easy', 'Moderate', 'Hard', 'Intense'];
 
-const TaskForm = ({ addTask }) => {
+function toDeadlineYmd(value) {
+  if (!value) return null;
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+  }
+  if (typeof value === 'string' && value) return value;
+  return null;
+}
+
+const TaskForm = ({
+  addTask,
+  defaultStartTime,
+  defaultEndTime,
+  defaultDeadline,
+  onTimesChange,
+  onCancel,
+  variant,
+}) => {
+  const ui = TASKFORM_THEMES[variant] || TASKFORM_THEMES.dashboard;
+  const isDay = variant === 'day';
   // Toggle state
-  const [creationType, setCreationType] = useState('task'); // 'task' or 'event'
+  const [creationType, setCreationType] = useState(defaultStartTime ? 'event' : 'task'); // 'task' or 'event'
   
   // Shared state
   const [name, setName] = useState('');
   const [taskType, setTaskType] = useState('Work');
   const [deadline, setDeadline] = useState(() => {
+    const fromDefault = toDeadlineYmd(defaultDeadline);
+    if (fromDefault) return fromDefault;
     // Initialize with current date in YYYY-MM-DD format
     const today = new Date();
     const year = today.getFullYear();
@@ -852,6 +932,7 @@ const TaskForm = ({ addTask }) => {
   // Event-specific state
   const [description, setDescription] = useState('');
   const [startTime, setStartTime] = useState(() => {
+    if (defaultStartTime instanceof Date) return defaultStartTime;
     // Calculate the next 30-minute interval
     const now = new Date();
     const currentMinutes = now.getMinutes();
@@ -867,11 +948,12 @@ const TaskForm = ({ addTask }) => {
       nextIntervalHour = (nextIntervalHour + 1) % 24;
     }
     
-    const defaultStartTime = new Date();
-    defaultStartTime.setHours(nextIntervalHour, nextIntervalMinutes, 0, 0);
-    return defaultStartTime;
+    const fallbackStart = new Date();
+    fallbackStart.setHours(nextIntervalHour, nextIntervalMinutes, 0, 0);
+    return fallbackStart;
   });
   const [endTime, setEndTime] = useState(() => {
+    if (defaultEndTime instanceof Date) return defaultEndTime;
     // Calculate 1 hour after the default start time
     const now = new Date();
     const currentMinutes = now.getMinutes();
@@ -890,9 +972,9 @@ const TaskForm = ({ addTask }) => {
     // Add 1 hour to get end time
     const endHour = (nextIntervalHour + 1) % 24;
     
-    const defaultEndTime = new Date();
-    defaultEndTime.setHours(endHour, nextIntervalMinutes, 0, 0);
-    return defaultEndTime;
+    const fallbackEnd = new Date();
+    fallbackEnd.setHours(endHour, nextIntervalMinutes, 0, 0);
+    return fallbackEnd;
   });
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [timePickerTarget, setTimePickerTarget] = useState(null);
@@ -924,6 +1006,26 @@ const TaskForm = ({ addTask }) => {
       setDateInputValue('');
     }
   }, [deadline]);
+
+  const onTimesChangeRef = useRef(onTimesChange);
+  onTimesChangeRef.current = onTimesChange;
+
+  const defaultStartMs = defaultStartTime instanceof Date ? defaultStartTime.getTime() : null;
+  const defaultEndMs = defaultEndTime instanceof Date ? defaultEndTime.getTime() : null;
+  const defaultDeadlineKey = toDeadlineYmd(defaultDeadline);
+
+  useEffect(() => {
+    if (defaultStartMs != null) setStartTime(new Date(defaultStartMs));
+    if (defaultEndMs != null) setEndTime(new Date(defaultEndMs));
+  }, [defaultStartMs, defaultEndMs]);
+
+  useEffect(() => {
+    if (defaultDeadlineKey) setDeadline(defaultDeadlineKey);
+  }, [defaultDeadlineKey]);
+
+  useEffect(() => {
+    onTimesChangeRef.current?.(startTime, endTime);
+  }, [startTime, endTime]);
 
   // Reset dateInputValue when form is submitted
   const resetForm = () => {
@@ -1385,6 +1487,9 @@ const TaskForm = ({ addTask }) => {
         alert("Please select both start and end times for the event.");
         return;
       }
+      if (formatTime(startTime, '24') === formatTime(endTime, '24')) {
+        return;
+      }
 
       const event = {
         id: Date.now(),
@@ -1596,12 +1701,17 @@ const TaskForm = ({ addTask }) => {
   };
 
   return (
-    <div style={{
-      background: 'rgba(160, 132, 232, 0.1)',
-      padding: '1.5rem',
-      borderRadius: '8px',
-      border: '1px solid rgba(160, 132, 232, 0.2)',
-      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)'
+    <div
+      className={isDay ? 'taskform--day' : undefined}
+      style={{
+      background: ui.cardBg,
+      padding: isDay ? 0 : '1.5rem',
+      borderRadius: isDay ? 0 : '8px',
+      border: ui.cardBorder,
+      boxShadow: ui.cardShadow,
+      fontFamily: "'Karla', sans-serif",
+      width: isDay ? '100%' : undefined,
+      boxSizing: 'border-box',
     }}>
       <style>
         {`
@@ -1624,7 +1734,7 @@ const TaskForm = ({ addTask }) => {
           <div style={{
             fontSize: '1rem',
             fontWeight: 600,
-              color: 'white'
+              color: ui.text
             }}>
               {creationType === 'task' ? 'Task' : 'Event'} Creation
             </div>
@@ -1632,17 +1742,17 @@ const TaskForm = ({ addTask }) => {
             {/* Event/Task Toggle */}
             <div style={{
               display: 'flex',
-              background: '#2e0066',
+              background: ui.toggleBg,
               borderRadius: '999px',
               padding: '0.1rem',
-              border: '1px solid #a084e8'
+              border: `1px solid ${ui.toggleBorder}`
             }}>
               <button
                 type="button"
                 onClick={() => { setCreationType('task'); setShowTimePicker(false); }}
                 style={{
-                  background: creationType === 'task' ? 'linear-gradient(135deg, #a084e8 0%, #8b5cf6 100%)' : 'transparent',
-                  color: creationType === 'task' ? 'white' : '#a084e8',
+                  background: creationType === 'task' ? ui.toggleSelectedBg : 'transparent',
+                  color: creationType === 'task' ? ui.toggleSelectedText : ui.toggleUnselectedText,
                   border: 'none',
                   borderRadius: '999px',
                   padding: '0.2rem 0.5rem',
@@ -1660,8 +1770,8 @@ const TaskForm = ({ addTask }) => {
                 type="button"
                 onClick={() => { setCreationType('event'); setShowTimePicker(false); }}
                 style={{
-                  background: creationType === 'event' ? 'linear-gradient(135deg, #a084e8 0%, #8b5cf6 100%)' : 'transparent',
-                  color: creationType === 'event' ? 'white' : '#a084e8',
+                  background: creationType === 'event' ? ui.toggleSelectedBg : 'transparent',
+                  color: creationType === 'event' ? ui.toggleSelectedText : ui.toggleUnselectedText,
                   border: 'none',
                   borderRadius: '999px',
                   padding: '0.2rem 0.5rem',
@@ -1700,9 +1810,9 @@ const TaskForm = ({ addTask }) => {
                     width: '100%',
                     padding: '0.875rem',
                     borderRadius: '8px',
-                    border: '1px solid #a084e8',
-                    background: '#2e0066',
-                    color: 'white',
+                    border: `1px solid ${ui.inputBorder}`,
+                    background: ui.inputBg,
+                    color: ui.inputText,
                     fontSize: '0.9rem',
                     fontFamily: "'Karla', sans-serif",
                     outline: 'none',
@@ -1722,9 +1832,9 @@ const TaskForm = ({ addTask }) => {
                     width: '100%',
                     padding: '0.875rem',
                     borderRadius: '8px',
-                    border: '1px solid #a084e8',
-                    background: '#2e0066',
-                    color: 'white',
+                    border: `1px solid ${ui.inputBorder}`,
+                    background: ui.inputBg,
+                    color: ui.inputText,
                     fontSize: '0.9rem',
                     fontFamily: "'Karla', sans-serif",
                     outline: 'none',
@@ -1756,9 +1866,9 @@ const TaskForm = ({ addTask }) => {
                     width: '100%',
                     padding: '0.875rem',
                     borderRadius: '8px',
-                    border: '1px solid #a084e8',
-                    background: '#2e0066',
-                    color: 'white',
+                    border: `1px solid ${ui.inputBorder}`,
+                    background: ui.inputBg,
+                    color: ui.inputText,
                     fontSize: '0.9rem',
                     fontFamily: "'Karla', sans-serif",
                     outline: 'none',
@@ -1778,9 +1888,9 @@ const TaskForm = ({ addTask }) => {
                     width: '100%',
                     padding: '0.875rem',
                     borderRadius: '8px',
-                    border: '1px solid #a084e8',
-                    background: '#2e0066',
-                    color: 'white',
+                    border: `1px solid ${ui.inputBorder}`,
+                    background: ui.inputBg,
+                    color: ui.inputText,
                     fontSize: '0.9rem',
                     fontFamily: "'Karla', sans-serif",
                     outline: 'none',
@@ -1805,7 +1915,7 @@ const TaskForm = ({ addTask }) => {
               marginBottom: '0.25rem',
               fontSize: '0.9rem',
               fontWeight: 600,
-              color: 'white',
+              color: ui.label,
               display: 'block'
             }}>
               Task Type
@@ -1818,9 +1928,9 @@ const TaskForm = ({ addTask }) => {
                 padding: '0.875rem',
 
                 borderRadius: '8px',
-                border: '1px solid #a084e8',
-                background: '#2e0066',
-                color: 'white',
+                border: `1px solid ${ui.inputBorder}`,
+                background: ui.inputBg,
+                color: ui.inputText,
                 fontSize: '0.9rem',
                 fontFamily: "'Karla', sans-serif",
                 outline: 'none',
@@ -1841,7 +1951,7 @@ const TaskForm = ({ addTask }) => {
               marginBottom: '0.25rem',
               fontSize: '0.9rem',
               fontWeight: 600,
-              color: 'white',
+              color: ui.label,
               display: 'block'
             }}>
               Deadline
@@ -1867,6 +1977,7 @@ const TaskForm = ({ addTask }) => {
                     placeholder="MM/DD/YYYY"
                     onClick={() => setIsDatePickerOpen(true)}
                     onAutoComplete={autoCompleteDateWithValue}
+                    palette={ui}
                   />
                 }
                 calendarClassName={`custom-datepicker-calendar${isDraggingDate ? ' dragging' : ''}`}
@@ -1945,7 +2056,7 @@ const TaskForm = ({ addTask }) => {
               <div style={{
                 fontSize: '0.9rem',
                 fontWeight: 600,
-                color: 'white',
+                color: ui.label,
                 marginBottom: '0.25rem',
                 display: 'flex',
                 gap: '1rem'
@@ -1976,13 +2087,13 @@ const TaskForm = ({ addTask }) => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      background: 'rgba(108, 99, 255, 0.6)',
-                      color: '#fff',
+                      background: ui.timePillBg,
+                      color: ui.timePillText,
                       borderRadius: '12px',
                       padding: '0.75rem 1rem',
                       fontSize: '14px',
                       fontWeight: 600,
-                      border: 'none',
+                      border: ui.timePillBorder,
                       outline: 'none',
                       textAlign: 'center',
                       minWidth: '100px',
@@ -1993,8 +2104,8 @@ const TaskForm = ({ addTask }) => {
                       userSelect: 'none',
                       width: '100%'
                     }}
-                    onMouseEnter={(e) => e.target.style.backgroundColor = '#ddd6fe'}
-                    onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(108, 99, 255, 0.6)'}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = ui.timePillHover}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = ui.timePillBg}
                   >
                     {startTime ? formatTime(startTime, '24') : 'Start'}
                   </span>
@@ -2016,13 +2127,13 @@ const TaskForm = ({ addTask }) => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      background: 'rgba(108, 99, 255, 0.6)',
-                      color: '#fff',
+                      background: ui.timePillBg,
+                      color: ui.timePillText,
                       borderRadius: '12px',
                       padding: '0.75rem 1rem',
                       fontSize: '14px',
                       fontWeight: 600,
-                      border: 'none',
+                      border: ui.timePillBorder,
                       outline: 'none',
                       textAlign: 'center',
                       minWidth: '100px',
@@ -2033,8 +2144,8 @@ const TaskForm = ({ addTask }) => {
                       userSelect: 'none',
                       width: '100%'
                     }}
-                    onMouseEnter={(e) => e.target.style.backgroundColor = '#ddd6fe'}
-                    onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(108, 99, 255, 0.6)'}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = ui.timePillHover}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = ui.timePillBg}
                   >
                     {endTime ? formatTime(endTime, '24') : 'End'}
                   </span>
@@ -2047,7 +2158,7 @@ const TaskForm = ({ addTask }) => {
               marginBottom: '0.25rem',
               fontSize: '0.9rem',
               fontWeight: 600,
-              color: 'white',
+              color: ui.label,
               display: 'block'
             }}>
               Duration (minutes)
@@ -2084,9 +2195,9 @@ const TaskForm = ({ addTask }) => {
                   width: '100%',
                   padding: '0.875rem',
                   borderRadius: '8px',
-                  border: durationError ? '2px solid #ff1744' : '1px solid #a084e8',
-                  background: '#2e0066',
-                  color: 'white',
+                  border: durationError ? '2px solid #ff1744' : `1px solid ${ui.inputBorder}`,
+                  background: ui.inputBg,
+                  color: ui.inputText,
                   fontSize: '0.9rem',
                   outline: 'none',
                   transition: 'border-color 0.2s ease'
@@ -2133,7 +2244,7 @@ const TaskForm = ({ addTask }) => {
               marginBottom: '0.25rem',
               fontSize: '0.9rem',
               fontWeight: 600,
-              color: 'white',
+              color: ui.label,
               display: 'block'
             }}>
               Energy Level
@@ -2156,7 +2267,7 @@ const TaskForm = ({ addTask }) => {
                   width: '100%',
                   height: '8px',
                   borderRadius: '4px',
-                  background: `linear-gradient(to right, ${getEnergyColor(Math.round(isDraggingEnergy ? dragEnergyValue : energy))} 0%, ${getEnergyColor(Math.round(isDraggingEnergy ? dragEnergyValue : energy))} ${((isDraggingEnergy ? dragEnergyValue : energy) - 1) * 25}%, #4b5563 ${((isDraggingEnergy ? dragEnergyValue : energy) - 1) * 25}%, #4b5563 100%)`,
+                  background: `linear-gradient(to right, ${getEnergyColor(Math.round(isDraggingEnergy ? dragEnergyValue : energy))} 0%, ${getEnergyColor(Math.round(isDraggingEnergy ? dragEnergyValue : energy))} ${((isDraggingEnergy ? dragEnergyValue : energy) - 1) * 25}%, ${ui.trackUnused} ${((isDraggingEnergy ? dragEnergyValue : energy) - 1) * 25}%, ${ui.trackUnused} 100%)`,
                   outline: 'none',
                   cursor: 'pointer',
                   WebkitAppearance: 'none',
@@ -2187,7 +2298,7 @@ const TaskForm = ({ addTask }) => {
               marginBottom: '0.25rem',
               fontSize: '0.9rem',
               fontWeight: 600,
-              color: 'white',
+              color: ui.label,
               display: 'block'
             }}>
               Priority Level
@@ -2210,7 +2321,7 @@ const TaskForm = ({ addTask }) => {
                   width: '100%',
                   height: '8px',
                   borderRadius: '4px',
-                  background: `linear-gradient(to right, ${getPriorityColor(Math.round(isDraggingPriority ? dragPriorityValue : priority))} 0%, ${getPriorityColor(Math.round(isDraggingPriority ? dragPriorityValue : priority))} ${((isDraggingPriority ? dragPriorityValue : priority) - 1) * 25}%, #4b5563 ${((isDraggingPriority ? dragPriorityValue : priority) - 1) * 25}%, #4b5563 100%)`,
+                  background: `linear-gradient(to right, ${getPriorityColor(Math.round(isDraggingPriority ? dragPriorityValue : priority))} 0%, ${getPriorityColor(Math.round(isDraggingPriority ? dragPriorityValue : priority))} ${((isDraggingPriority ? dragPriorityValue : priority) - 1) * 25}%, ${ui.trackUnused} ${((isDraggingPriority ? dragPriorityValue : priority) - 1) * 25}%, ${ui.trackUnused} 100%)`,
                   outline: 'none',
                   cursor: 'pointer',
                   WebkitAppearance: 'none',
@@ -2238,28 +2349,53 @@ const TaskForm = ({ addTask }) => {
         )}
 
         {/* Submit Button */}
-        <button
-          type="submit"
-          style={{
-            padding: '0.875rem',
-            borderRadius: '8px',
-            border: 'none',
-            background: '#a084e8',
-            color: 'white',
-            fontSize: '0.9rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-            transition: 'background-color 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.background = '#8b5cf6';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.background = '#a084e8';
-          }}
-        >
-          Add {creationType === 'task' ? 'Task' : 'Event'}
-        </button>
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          {onCancel ? (
+            <button
+              type="button"
+              onClick={() => {
+                resetForm();
+                onCancel();
+              }}
+              style={{
+                flex: 1,
+                padding: '0.875rem',
+                borderRadius: '8px',
+                border: `1px solid ${ui.cancelBorder}`,
+                background: 'transparent',
+                color: ui.cancelText,
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          ) : null}
+          <button
+            type="submit"
+            style={{
+              flex: onCancel ? 1 : undefined,
+              padding: '0.875rem',
+              borderRadius: '8px',
+              border: 'none',
+              background: ui.submitBg,
+              color: ui.submitText,
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'background-color 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = ui.submitHover;
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = ui.submitBg;
+            }}
+          >
+            Add {creationType === 'task' ? 'Task' : 'Event'}
+          </button>
+        </div>
       </form>
 
       {/* Time Picker */}
