@@ -1,4 +1,4 @@
-/* Container */
+/* Container — same box as .calendar-grid so height and chevron origin match Week View */
 .day-view {
   position: relative;
   flex: 1;
@@ -7,41 +7,46 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  padding: 3.6rem 0 0;
+  padding: 0;
   background-color: #fff;
   font-family: 'Karla', sans-serif;
   overflow: hidden;
   color: #222;
 }
 
-.day-view-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 1.25rem 0.75rem;
-  flex-shrink: 0;
+/* Keep chevrons at Week View’s top: 1.2rem / left: 1.5rem */
+.day-view .calendar-nav-bar {
+  align-items: flex-start;
+  overflow: visible;
 }
 
-.day-view-heading-block {
+.day-view-heading {
+  margin-left: 8px;
   min-width: 0;
+  line-height: 1;
+  transform: translateY(-6px); /* may sit slightly above the 18px chevrons */
 }
 
 .day-title {
   margin: 0;
-  color: #0a0a0a;
-  font-family: Karla, sans-serif;
-  font-size: 1.75rem;
+  font-family: 'Karla', sans-serif;
+  font-size: 1.5rem;
   font-weight: 700;
+  color: #111;
   letter-spacing: 0.04em;
-  line-height: 1.15;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-.day-subtitle {
-  margin: 4px 0 0;
-  color: #6b6b6b;
-  font-size: 0.95rem;
-  font-weight: 500;
+.day-view-header {
+  display: flex;
+  align-items: center;
+  height: 60px; /* match Week View .header-row */
+  padding: 0;
+  flex-shrink: 0;
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0; /* match Week View header-row */
+  box-sizing: border-box;
 }
 
 .day-view-hybrid {
@@ -49,7 +54,6 @@
   min-height: 0;
   display: flex;
   overflow: hidden;
-  border-top: 1px solid #ece6f5;
 }
 
 .day-view-hybrid.is-dragging {
@@ -88,18 +92,22 @@
 
 .day-timeline-hours {
   flex-shrink: 0;
-  border-right: 1px solid #e8e0f4;
-  background: #fbfaff;
+  border-right: 1px solid #e1e1e1; /* match .calendar-cell */
+  background: #fff; /* match .time-column */
 }
 
 .day-timeline-hour {
   box-sizing: border-box;
   padding: 4px 8px 0 0;
   text-align: right;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: #8a8a8a;
-  border-top: 1px solid #eee;
+  font-size: 0.85rem; /* match .calendar-cell */
+  font-weight: 600; /* match .time-column */
+  color: #111; /* match .time-column */
+  border-top: 1px solid #e1e1e1; /* match .calendar-cell */
+}
+
+.day-timeline-hour:first-child {
+  border-top: none; /* match .calendar-row:first-of-type .calendar-cell */
 }
 
 .day-timeline-daycol {
@@ -110,8 +118,12 @@
 
 .day-timeline-slot {
   box-sizing: border-box;
-  border-top: 1px solid #eee;
+  border-top: 1px solid #e1e1e1; /* match .calendar-cell */
   background: #fff;
+}
+
+.day-timeline-slot:first-child {
+  border-top: none; /* match .calendar-row:first-of-type .calendar-cell */
 }
 
 .day-timeline-now {
@@ -170,6 +182,36 @@
   color: #fff;
 }
 
+.day-time-block-draft {
+  position: absolute;
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 3;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 6px 8px;
+  color: #a259ff;
+  background: transparent;
+  border: 2px solid #a259ff;
+  box-shadow: none;
+  opacity: 1;
+}
+
+.day-time-block-draft.is-short {
+  display: flex;
+  align-items: center;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.day-time-block-draft-time {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #a259ff;
+  opacity: 1;
+  white-space: nowrap;
+}
+
 .day-time-block-preview-label {
   min-width: 0;
 }
@@ -180,15 +222,15 @@
 
 .day-time-block-preview-time {
   margin-top: 2px;
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 500;
   opacity: 0.95;
   white-space: nowrap;
 }
 
 .day-time-block-title {
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.2;
   padding-right: 72px;
   white-space: nowrap;
@@ -207,12 +249,12 @@
 .day-time-block.is-short .day-time-block-title {
   padding-right: 0;
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.2;
 }
 
 .day-time-block-time-inline {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 500;
   opacity: 0.95;
   white-space: nowrap;
@@ -220,7 +262,8 @@
 
 .day-time-block-time {
   margin-top: 2px;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
+  font-weight: 500;
   opacity: 0.92;
 }
 
@@ -275,9 +318,30 @@
   max-width: 420px;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   background: #faf8ff;
   overflow: auto;
-  padding: 12px;
+  padding: 12px 1.5rem;
+}
+
+.day-agenda.is-creating {
+  padding: 12px 1.5rem;
+  background: #faf8ff;
+  overflow: hidden;
+}
+
+.day-agenda-create-panel,
+.day-agenda-body {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.day-agenda-create-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: transparent;
 }
 
 .day-agenda-toolbar {

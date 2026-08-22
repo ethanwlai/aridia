@@ -6,12 +6,26 @@ import DayAgenda from './DayAgenda';
 import {
   buildItemsByDate,
   formatDateKey,
-  isSameDate,
   startOfDay,
 } from '../utils/calendarItems';
 import './DayView.css';
 
 const DRAG_THRESHOLD = 6;
+const CREATE_DURATION_MINUTES = 30;
+
+function buildCreateSession(dayStart, startMinutes) {
+  const clamped = Math.max(0, Math.min(24 * 60 - CREATE_DURATION_MINUTES, startMinutes));
+  const start = new Date(dayStart);
+  start.setHours(0, clamped, 0, 0);
+  const end = new Date(start);
+  end.setMinutes(end.getMinutes() + CREATE_DURATION_MINUTES);
+  return {
+    startMinutes: clamped,
+    endMinutes: clamped + CREATE_DURATION_MINUTES,
+    start,
+    end,
+  };
+}
 
 const DayView = ({
   tasks = [],
@@ -29,12 +43,11 @@ const DayView = ({
   onHighlightItem,
 }) => {
   const selectedDate = startOfDay(centerDay || new Date());
-  const today = startOfDay(new Date());
-  const isToday = isSameDate(selectedDate, today);
   const dateKey = formatDateKey(selectedDate);
 
   const [scrollToId, setScrollToId] = useState(null);
   const [agendaDrag, setAgendaDrag] = useState(null);
+  const [createSession, setCreateSession] = useState(null);
   const agendaDragRef = useRef(null);
   agendaDragRef.current = agendaDrag;
 
@@ -54,7 +67,36 @@ const DayView = ({
 
   const goPrev = () => setCenterDay?.(addDays(selectedDate, -1));
   const goNext = () => setCenterDay?.(addDays(selectedDate, 1));
-  const goToday = () => setCenterDay?.(today);
+
+  const closeCreate = useCallback(() => {
+    setCreateSession(null);
+  }, []);
+
+  const handleCreateAt = useCallback((startMinutes) => {
+    setCreateSession(buildCreateSession(selectedDate, startMinutes));
+  }, [selectedDate]);
+
+  const handleCreateTimesChange = useCallback((start, end) => {
+    if (!(start instanceof Date) || !(end instanceof Date)) return;
+    const startMinutes = start.getHours() * 60 + start.getMinutes();
+    let endMinutes = end.getHours() * 60 + end.getMinutes();
+    if (endMinutes <= startMinutes) endMinutes += 24 * 60;
+    setCreateSession((prev) => (
+      prev
+        ? { ...prev, startMinutes, endMinutes, start, end }
+        : prev
+    ));
+  }, []);
+
+  const handleCreateAdd = useCallback((task) => {
+    if (task.startTime && task.endTime && task.startTime === task.endTime) return;
+    onAdd?.(task);
+    setCreateSession(null);
+  }, [onAdd]);
+
+  useEffect(() => {
+    setCreateSession(null);
+  }, [dateKey]);
 
   const handleAgendaPointerDragStart = useCallback((item, e) => {
     if (window.openDropdownRef?.current) {
@@ -167,19 +209,15 @@ const DayView = ({
       <CalendarViewNav
         onPrev={goPrev}
         onNext={goNext}
-        onToday={goToday}
         prevLabel="Previous day"
         nextLabel="Next day"
-      />
-
-      <div className="day-view-header">
-        <div className="day-view-heading-block">
-          <h1 className="day-title">
-            {isToday ? 'Today' : format(selectedDate, 'EEEE')}
-          </h1>
-          <p className="day-subtitle">{format(selectedDate, 'MMMM d, yyyy')}</p>
+      >
+        <div className="day-view-heading">
+          <h1 className="day-title">{format(selectedDate, 'EEEE')}</h1>
         </div>
-      </div>
+      </CalendarViewNav>
+
+      <div className="day-view-header" />
 
       <div className={`day-view-hybrid${agendaDrag ? ' is-dragging' : ''}`}>
         <DayTimeline
@@ -187,7 +225,6 @@ const DayView = ({
           items={dayItems}
           highlightedItem={highlightedItem}
           onHighlightItem={onHighlightItem}
-          onAdd={onAdd}
           onUpdateTask={onUpdateTask}
           onDelete={onDelete}
           onUpdateStatus={onUpdateStatus}
@@ -198,6 +235,9 @@ const DayView = ({
           scrollToId={scrollToId}
           externalDragItem={isAgendaDragging ? agendaDrag.item : null}
           onExternalDragEnd={handleExternalDragEnd}
+          createSession={createSession}
+          onCreateAt={handleCreateAt}
+          onCancelCreate={closeCreate}
         />
         <DayAgenda
           day={selectedDate}
@@ -207,13 +247,16 @@ const DayView = ({
           onHighlightItem={onHighlightItem}
           draggingId={draggingId}
           isDragging={isAgendaDragging}
-          onAdd={onAdd}
+          onAdd={createSession ? handleCreateAdd : onAdd}
           onEdit={onEdit}
           onDelete={onDelete}
           onUpdateStatus={onUpdateStatus}
           onAutoSchedule={onAutoSchedule}
           onQuickMove={onQuickMove}
           onExtendDuration={onExtendDuration}
+          createSession={createSession}
+          onCancelCreate={closeCreate}
+          onTimesChange={handleCreateTimesChange}
         />
       </div>
     </div>

@@ -1721,7 +1721,7 @@ const CircularDurationPicker = ({ value, onChange, onClose, anchorRef, open }) =
   return ReactDOM.createPortal(picker, document.body);
 };
 
-const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClose, onTimePickerClose, defaultStartTime, defaultEndTime, defaultDeadline, editingTask, onUpdate, showPlusCircle = true }) => {
+const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClose, onTimePickerClose, defaultStartTime, defaultEndTime, defaultDeadline, editingTask, onUpdate, showPlusCircle = true, onTimesChange }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState(defaultDeadline || null);
@@ -1766,6 +1766,21 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
   const [isDraggingDate, setIsDraggingDate] = useState(false);
   const [draggedDate, setDraggedDate] = useState(null);
   const datePickerRef = useRef(null);
+  const onTimesChangeRef = useRef(onTimesChange);
+  onTimesChangeRef.current = onTimesChange;
+
+  const defaultStartMs = defaultStartTime instanceof Date ? defaultStartTime.getTime() : null;
+  const defaultEndMs = defaultEndTime instanceof Date ? defaultEndTime.getTime() : null;
+
+  React.useEffect(() => {
+    if (editingTask) return;
+    if (defaultStartMs != null) setStartTime(new Date(defaultStartMs));
+    if (defaultEndMs != null) setEndTime(new Date(defaultEndMs));
+  }, [editingTask, defaultStartMs, defaultEndMs]);
+
+  React.useEffect(() => {
+    onTimesChangeRef.current?.(startTime, endTime);
+  }, [startTime, endTime]);
 
   // Populate fields when editingTask is provided
   React.useEffect(() => {
