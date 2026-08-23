@@ -325,23 +325,35 @@
 }
 
 .day-agenda.is-creating {
-  padding: 12px 1.5rem;
+  padding: 12px clamp(12px, 4%, 1.5rem);
   background: #faf8ff;
   overflow: hidden;
+  min-width: 0;
+  min-height: 0;
 }
 
 .day-agenda-create-panel,
 .day-agenda-body {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
 }
 
 .day-agenda-create-panel {
   flex: 1;
+  min-width: 0;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   background: transparent;
+  display: flex;
+  flex-direction: column;
+}
+
+.day-agenda-create-panel > * {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
 }
 
 .day-agenda-toolbar {
