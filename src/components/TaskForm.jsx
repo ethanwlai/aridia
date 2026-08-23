@@ -1711,6 +1711,9 @@ const TaskForm = ({
       boxShadow: ui.cardShadow,
       fontFamily: "'Karla', sans-serif",
       width: isDay ? '100%' : undefined,
+      minWidth: isDay ? 0 : undefined,
+      minHeight: isDay ? 0 : undefined,
+      height: isDay ? '100%' : undefined,
       boxSizing: 'border-box',
     }}>
       <style>
@@ -1722,10 +1725,16 @@ const TaskForm = ({
           }
         `}
       </style>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <form
+        onSubmit={handleSubmit}
+        className={isDay ? 'taskform-day-form' : undefined}
+        style={isDay ? undefined : { display: 'flex', flexDirection: 'column', gap: '1rem' }}
+      >
         {/* Task Creation Header */}
-        <div style={{ marginBottom: '0.5rem' }}>
-          <div style={{
+        <div className={isDay ? 'taskform-day-header' : undefined} style={isDay ? undefined : { marginBottom: '0.5rem' }}>
+          <div
+            className={isDay ? 'taskform-day-title-row' : undefined}
+            style={isDay ? undefined : {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -1789,13 +1798,15 @@ const TaskForm = ({
           </div>
           {creationType === 'event' ? (
             // Event creation: side by side layout
-            <div style={{ 
+            <div
+              className={isDay ? 'taskform-day-row' : undefined}
+              style={isDay ? undefined : { 
               display: 'flex', 
               gap: '1rem', 
               marginTop: '0.25rem'
             }}>
               {/* Event Name Input - 60% */}
-              <div style={{ flex: '0.6' }}>
+              <div className={isDay ? 'taskform-day-field taskform-day-field-name' : undefined} style={isDay ? undefined : { flex: '0.6' }}>
                 <input
                   type="text"
                   placeholder="Enter event name..."
@@ -1822,7 +1833,7 @@ const TaskForm = ({
               </div>
               
               {/* Description Input - 40% */}
-              <div style={{ flex: '0.4' }}>
+              <div className={isDay ? 'taskform-day-field taskform-day-field-desc' : undefined} style={isDay ? undefined : { flex: '0.4' }}>
                 <input
                   type="text"
                   placeholder="Description (optional)"
@@ -1845,13 +1856,15 @@ const TaskForm = ({
             </div>
           ) : (
             // Task creation: side by side layout
-            <div style={{ 
+            <div
+              className={isDay ? 'taskform-day-row' : undefined}
+              style={isDay ? undefined : { 
               display: 'flex', 
               gap: '1rem', 
               marginTop: '0.25rem'
             }}>
               {/* Task Name Input - 60% */}
-              <div style={{ flex: '0.6' }}>
+              <div className={isDay ? 'taskform-day-field taskform-day-field-name' : undefined} style={isDay ? undefined : { flex: '0.6' }}>
                 <input
                   type="text"
                   placeholder="Enter task name..."
@@ -1878,7 +1891,7 @@ const TaskForm = ({
               </div>
               
               {/* Description Input - 40% */}
-              <div style={{ flex: '0.4' }}>
+              <div className={isDay ? 'taskform-day-field taskform-day-field-desc' : undefined} style={isDay ? undefined : { flex: '0.4' }}>
                 <input
                   type="text"
                   placeholder="Description (optional)"
@@ -1903,14 +1916,16 @@ const TaskForm = ({
         </div>
 
         {/* Task Type, Deadline, and Duration - Side by Side */}
-        <div style={{ 
+        <div
+          className={isDay ? 'taskform-day-row' : undefined}
+          style={isDay ? undefined : { 
           display: 'flex', 
           gap: '1rem', 
           marginBottom: '0.5rem',
           flexWrap: 'wrap'
         }}>
           {/* Task Type Dropdown */}
-          <div style={{ flex: '1', minWidth: '150px' }}>
+          <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '150px' }}>
             <label style={{
               marginBottom: '0.25rem',
               fontSize: '0.9rem',
@@ -1918,7 +1933,7 @@ const TaskForm = ({
               color: ui.label,
               display: 'block'
             }}>
-              Task Type
+              {creationType === 'event' ? 'Event Type' : 'Task Type'}
             </label>
             <select
               value={taskType}
@@ -1946,7 +1961,7 @@ const TaskForm = ({
           </div>
 
           {/* Deadline Input with DatePicker */}
-          <div style={{ flex: '1', minWidth: '150px', position: 'relative' }}>
+          <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? { position: 'relative' } : { flex: '1', minWidth: '150px', position: 'relative' }}>
             <label style={{
               marginBottom: '0.25rem',
               fontSize: '0.9rem',
@@ -2052,7 +2067,7 @@ const TaskForm = ({
 
           {/* Time Pills (for events) or Duration Input (for tasks) */}
                       {creationType === 'event' ? (
-            <div style={{ flex: '1', minWidth: '300px' }}>
+            <div className={isDay ? 'taskform-day-field taskform-day-times' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '300px' }}>
               <div style={{
                 fontSize: '0.9rem',
                 fontWeight: 600,
@@ -2064,7 +2079,9 @@ const TaskForm = ({
                 <div style={{ flex: '1', textAlign: 'center' }}>Start Time</div>
                 <div style={{ flex: '1', textAlign: 'center' }}>End Time</div>
               </div>
-              <div style={{ 
+              <div
+                className={isDay ? 'taskform-day-times-pills' : undefined}
+                style={isDay ? undefined : { 
                 display: 'flex', 
                 gap: '1rem',
                 marginTop: '0.25rem',
@@ -2072,7 +2089,7 @@ const TaskForm = ({
                 flexWrap: 'wrap'
               }}>
                 {/* Start Time Section */}
-                <div style={{ flex: '1', minWidth: '120px' }}>
+                <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '120px' }}>
                   <span
                     className={`pill pill-time pill-time-trigger${showTimePicker && timePickerTarget === 'start' ? ' active' : ''}`}
                     tabIndex={0}
@@ -2096,7 +2113,7 @@ const TaskForm = ({
                       border: ui.timePillBorder,
                       outline: 'none',
                       textAlign: 'center',
-                      minWidth: '100px',
+                      minWidth: isDay ? 0 : '100px',
                       height: '50px',
                       cursor: 'pointer',
                       transition: 'background 0.2s',
@@ -2112,7 +2129,7 @@ const TaskForm = ({
                 </div>
 
                 {/* End Time Section */}
-                <div style={{ flex: '1', minWidth: '120px' }}>
+                <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '120px' }}>
                   <span
                     className={`pill pill-time pill-time-trigger${showTimePicker && timePickerTarget === 'end' ? ' active' : ''}`}
                     tabIndex={0}
@@ -2136,7 +2153,7 @@ const TaskForm = ({
                       border: ui.timePillBorder,
                       outline: 'none',
                       textAlign: 'center',
-                      minWidth: '100px',
+                      minWidth: isDay ? 0 : '100px',
                       height: '50px',
                       cursor: 'pointer',
                       transition: 'background 0.2s',
@@ -2153,7 +2170,7 @@ const TaskForm = ({
               </div>
             </div>
           ) : (
-          <div style={{ flex: '1', minWidth: '150px' }}>
+          <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '150px' }}>
             <label style={{
               marginBottom: '0.25rem',
               fontSize: '0.9rem',
@@ -2232,14 +2249,16 @@ const TaskForm = ({
 
         {/* Energy and Priority Levels - Side by Side (for tasks only) */}
         {creationType === 'task' && (
-        <div style={{ 
+        <div
+          className={isDay ? 'taskform-day-row' : undefined}
+          style={isDay ? undefined : { 
           display: 'flex', 
           gap: '1rem', 
           marginBottom: '0.5rem',
           flexWrap: 'wrap'
         }}>
           {/* Energy Level */}
-          <div style={{ flex: '1', minWidth: '200px' }}>
+          <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '200px' }}>
             <label style={{
               marginBottom: '0.25rem',
               fontSize: '0.9rem',
@@ -2293,7 +2312,7 @@ const TaskForm = ({
           </div>
 
           {/* Priority Level */}
-          <div style={{ flex: '1', minWidth: '200px' }}>
+          <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '200px' }}>
             <label style={{
               marginBottom: '0.25rem',
               fontSize: '0.9rem',
@@ -2349,7 +2368,7 @@ const TaskForm = ({
         )}
 
         {/* Submit Button */}
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div className={isDay ? 'taskform-day-actions' : undefined} style={isDay ? undefined : { display: 'flex', gap: '0.75rem' }}>
           {onCancel ? (
             <button
               type="button"

@@ -48,7 +48,124 @@ select {
 
 .taskform--day {
   width: 100%;
+  height: 100%;
+  min-width: 0;
+  max-width: 100%;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.taskform--day .taskform-day-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  gap: clamp(0.6rem, 1.8vh, 1.1rem);
+}
+
+.taskform--day .taskform-day-header {
+  margin-bottom: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.6rem, 1.8vh, 1.1rem);
+}
+
+.taskform--day .taskform-day-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0;
+  min-width: 0;
+  gap: 0.5rem;
+}
+
+.taskform--day .taskform-day-row {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: clamp(0.6rem, 1.8vh, 1.1rem);
+  min-width: 0;
+  max-width: 100%;
+  margin-bottom: 0;
+}
+
+.taskform--day .taskform-day-field {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.taskform--day .taskform-day-times {
+  width: 100%;
+  flex: none;
+}
+
+.taskform--day .taskform-day-times-pills {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: clamp(0.5rem, 2%, 1rem);
+  width: 100%;
+  min-width: 0;
+  margin-top: 0.25rem;
+}
+
+.taskform--day .taskform-day-times-pills .taskform-day-field {
+  flex: 1 1 0;
+  width: auto;
+}
+
+.taskform--day input,
+.taskform--day select,
+.taskform--day button,
+.taskform--day .pill-time,
+.taskform--day .react-datepicker-wrapper,
+.taskform--day .react-datepicker__input-container {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.taskform--day .react-datepicker-wrapper {
+  width: 100%;
+  display: block;
+}
+
+.taskform--day .pill-time {
+  min-width: 0 !important;
+  height: clamp(40px, 6vh, 50px);
+  padding: clamp(0.45rem, 1vh, 0.75rem) clamp(0.5rem, 1.5%, 1rem);
+}
+
+.taskform--day input[type="text"],
+.taskform--day select {
+  padding: clamp(0.5rem, 1.2vh, 0.875rem) !important;
+}
+
+.taskform--day input[type="range"] {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.taskform--day .taskform-day-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  margin-top: auto;
+  min-width: 0;
+}
+
+.taskform--day .taskform-day-actions button {
+  padding: clamp(0.5rem, 1.2vh, 0.875rem);
 }
 
 .taskform--day select {
