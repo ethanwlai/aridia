@@ -10,11 +10,11 @@ const LOGO_HEIGHT = 44;
 const LOGO_WIDTH = Math.round(LOGO_HEIGHT * (286 / 138)); // native 286×138, keep aspect ratio
 const LOGO_LEFT_INSET = 32;
 const LOGO_BUTTON_GAP = 12;
-const MIN_BUTTON_LEFT_EDGE = LOGO_LEFT_INSET + LOGO_WIDTH + LOGO_BUTTON_GAP;
+const HIDDEN_LOGO_LEFT_INSET = 12;
 const SEARCH_BAR_RIGHT_OFFSET = 24;
 // ═══════════════════════════════════════════════════════════════
 
-const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlightItem }) => {
+const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlightItem, sidebarWidth = 0, dashboardFullyOpen = false }) => {
   const [visibleButtons, setVisibleButtons] = useState(4); // Start with all 4 buttons visible
   const [buttonStartIndex, setButtonStartIndex] = useState(0); // Start index for visible buttons
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,11 +32,17 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
     transform: 'translateY(-50%)'
   });
   const [searchBarWidth, setSearchBarWidth] = useState(240); // Track search bar width for dropdown
+  const [logoVisible, setLogoVisible] = useState(true);
   const headerRef = useRef();
   const searchInputRef = useRef();
   const searchContainerRef = useRef();
   const dropdownRef = useRef();
   const skipNextSearchRef = useRef(false);
+  const logoVisibleRef = useRef(true);
+  const logoRef = useRef(null);
+  const lastVisibleButtonsRef = useRef(4);
+  const appliedLayoutRef = useRef({ numButtons: 4, startIndex: 0 });
+  const lastButtonPositionRef = useRef({ left: '50%', transform: 'translateX(-50%)' });
 
 
   // Load recent searches from localStorage
@@ -272,9 +278,8 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
 
   // Check available space and adjust visible buttons and search bar width
   useEffect(() => {
+    lastVisibleButtonsRef.current = 4;
     let lastHeaderWidth = 0; // Track the last header width to detect changes
-    const lastVisibleButtonsRef = { current: 4 }; // Track last visible button count for hysteresis (use ref to persist)
-    let lastButtonPosition = { left: '50%', transform: 'translateX(-50%)' }; // Track last button position to prevent unnecessary updates
     
     const checkSpace = () => {
       if (!headerRef.current) return;
@@ -327,265 +332,143 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
       // Priority: Always keep the selected button visible
       const buttonKeys = ['day', 'week', 'month', 'year'];
       const selectedButtonIndex = buttonKeys.indexOf(viewMode);
-      
-      // Add hysteresis to prevent rapid toggling: use a threshold buffer
-      const hysteresisBuffer = 10; // Extra buffer to prevent rapid toggling
-      
-      // Determine how many buttons can fit, then ensure selected button is included
-      // Strategy: Try different button configurations that include the selected button
-      let newVisibleButtons = 4;
-      let bestFit = null;
-      
-      // Try different button counts, prioritizing configurations that include the selected button
-      for (let numButtons = 4; numButtons >= 1; numButtons--) {
-        // Try different starting positions to find the best fit that includes selected button
-        // We want to show buttons around the selected one when space is limited
-        for (let startIndex = 0; startIndex <= 4 - numButtons; startIndex++) {
-          const endIndex = startIndex + numButtons - 1;
-          
-          // Skip if selected button is not in this range
-          if (selectedButtonIndex < startIndex || selectedButtonIndex > endIndex) {
-            continue;
-          }
-          
-          // Calculate button area width for this configuration
-          const buttonAreaWidth = numButtons * buttonWidth + Math.max(0, (numButtons - 1) * buttonGap);
-          const buttonAreaHalfWidth = buttonAreaWidth / 2;
-          
-          // Calculate where this button group would be positioned (centered on selected button)
-          // Position selected button at gridCenterX, then arrange others around it
-          const selectedButtonOffset = selectedButtonIndex - startIndex; // Offset of selected button within this group
-          const selectedButtonLeftEdge = gridCenterX - buttonAreaHalfWidth + (selectedButtonOffset * (buttonWidth + buttonGap));
-          const buttonGroupLeftEdge = selectedButtonLeftEdge - (selectedButtonOffset * (buttonWidth + buttonGap));
-          const buttonGroupRightEdge = buttonGroupLeftEdge + buttonAreaWidth;
-          
-          // Check if buttons fit
-          let maxAllowedButtonRightEdge = searchBarRightPosition - SEARCH_BAR_GAP;
-          let minAllowedButtonLeftEdge = MIN_BUTTON_LEFT_EDGE;
-          
-          // Add hysteresis
-          if (numButtons > lastVisibleButtonsRef.current) {
-            maxAllowedButtonRightEdge -= hysteresisBuffer;
-            minAllowedButtonLeftEdge += hysteresisBuffer;
-          } else if (numButtons < lastVisibleButtonsRef.current) {
-            maxAllowedButtonRightEdge += hysteresisBuffer;
-            minAllowedButtonLeftEdge -= hysteresisBuffer;
-          }
-          
-          if (buttonGroupLeftEdge >= minAllowedButtonLeftEdge && buttonGroupRightEdge <= maxAllowedButtonRightEdge) {
-            // This configuration fits! Use it
-            bestFit = { numButtons, startIndex, endIndex };
-            newVisibleButtons = numButtons;
-            break;
-          }
-        }
-        
-        if (bestFit) break;
-      }
-      
-      // If no configuration fits, show at least the selected button
-      if (!bestFit) {
-        newVisibleButtons = 1;
-        bestFit = { numButtons: 1, startIndex: selectedButtonIndex, endIndex: selectedButtonIndex };
-      }
-      
-      // Store the button range for later use (use let so it can be updated when search bar disappears)
-      let calculatedButtonStartIndex = bestFit ? bestFit.startIndex : selectedButtonIndex;
-      let calculatedButtonEndIndex = bestFit ? bestFit.endIndex : selectedButtonIndex;
-      
-      // Only update if the count or start index actually changed
-      if (newVisibleButtons !== lastVisibleButtonsRef.current || calculatedButtonStartIndex !== buttonStartIndex) {
-        setVisibleButtons(newVisibleButtons);
-        setButtonStartIndex(calculatedButtonStartIndex);
-        lastVisibleButtonsRef.current = newVisibleButtons;
-      }
-      
-      // Calculate button container position - center the selected button
-      const currentButtonAreaWidthFinal = newVisibleButtons * buttonWidth + Math.max(0, (newVisibleButtons - 1) * buttonGap);
-      const buttonAreaHalfWidth = currentButtonAreaWidthFinal / 2;
-      
-      // Calculate position so selected button is centered at gridCenterX
-      const selectedButtonOffset = selectedButtonIndex - calculatedButtonStartIndex; // Offset within visible button group
-      const selectedButtonLeftEdge = gridCenterX - buttonAreaHalfWidth + (selectedButtonOffset * (buttonWidth + buttonGap));
-      const buttonGroupLeftEdge = selectedButtonLeftEdge - (selectedButtonOffset * (buttonWidth + buttonGap));
-      const buttonGroupCenterX = buttonGroupLeftEdge + buttonAreaHalfWidth;
-      
-      // Round to avoid tiny floating point differences
-      const roundedButtonCenterX = Math.round(buttonGroupCenterX * 100) / 100;
-      const newButtonPosition = {
-        left: `${roundedButtonCenterX}px`,
-        transform: 'translateX(-50%)'
-      };
-      
-      // Only update position if it actually changed (prevents unnecessary re-renders and stuttering)
-      if (newButtonPosition.left !== lastButtonPosition.left || newButtonPosition.transform !== lastButtonPosition.transform) {
-        setButtonPosition(newButtonPosition);
-        lastButtonPosition = newButtonPosition;
-      }
-      
-      // Calculate the rightmost visible button's right edge (for search bar positioning)
-      const rightmostVisibleButtonIndex = calculatedButtonEndIndex;
-      const rightmostButtonLeftEdge = buttonGroupLeftEdge + (rightmostVisibleButtonIndex - calculatedButtonStartIndex) * (buttonWidth + buttonGap);
-      let finalYearButtonRightEdge = rightmostButtonLeftEdge + buttonWidth;
-      
-      // Calculate search bar left edge position
-      // The search bar is right-aligned, so its left edge should be:
-      // - At most: searchBarRightPosition - maxSearchBarWidth (to respect max width when there's space)
-      // - At least: buttons right edge + gap (to maintain gap from buttons when space is limited)
-      // Priority: Search bar should shrink/disappear FIRST before buttons hide
-      const maxSearchBarLeftPosition = searchBarRightPosition - maxSearchBarWidth;
-      const minSearchBarLeftPosition = finalYearButtonRightEdge + SEARCH_BAR_GAP;
-      // Use the rightmost position (larger value = more to the right = narrower search bar) that still maintains the gap
-      // This ensures we use max width when there's space, but shrink to maintain gap when needed
-      let searchBarLeftPosition = Math.max(maxSearchBarLeftPosition, minSearchBarLeftPosition);
-      
-      // If search bar would be too small, hide it completely and let buttons use that space
-      const calculatedSearchBarWidthTemp = searchBarRightPosition - searchBarLeftPosition;
-      if (calculatedSearchBarWidthTemp < 100) {
-        // Search bar disappears - buttons can use space up to searchBarRightPosition (no gap needed)
-        searchBarLeftPosition = searchBarRightPosition;
-      }
-      
-      // Calculate search bar width based on available space
-      const calculatedSearchBarWidth = searchBarRightPosition - searchBarLeftPosition;
-      
-      // Ensure search bar maintains the configured gap and doesn't go negative
-      let finalSearchBarWidth = Math.max(0, calculatedSearchBarWidth);
-      
-      // If width is very small (less than 100px), set to 0 to effectively hide it
-      if (finalSearchBarWidth < 100) {
-        finalSearchBarWidth = 0;
-      }
-      
-      // If search bar is hidden, recalculate buttons with more space (they can use space up to searchBarRightPosition)
-      if (finalSearchBarWidth === 0) {
-        // Search bar is gone - recalculate buttons without reserving space for search bar
-        // Use the same range logic to ensure selected button is included
-        let newVisibleButtonsAfterSearchBarGone = 4;
-        let bestFitAfter = null;
-        
+      const hysteresisBuffer = 10;
+
+      const groupWidthFor = (numButtons) => (
+        numButtons * buttonWidth + Math.max(0, (numButtons - 1) * buttonGap)
+      );
+      const findBestFit = (minLeft, maxRight, protectLeft = false) => {
+        let fit = null;
         for (let numButtons = 4; numButtons >= 1; numButtons--) {
-          // Try different starting positions to find the best fit that includes selected button
           for (let startIndex = 0; startIndex <= 4 - numButtons; startIndex++) {
             const endIndex = startIndex + numButtons - 1;
-            
-            // Skip if selected button is not in this range
-            if (selectedButtonIndex < startIndex || selectedButtonIndex > endIndex) {
-              continue;
-            }
-            
-            const buttonAreaWidth = numButtons * buttonWidth + Math.max(0, (numButtons - 1) * buttonGap);
-            const buttonAreaHalfWidth = buttonAreaWidth / 2;
-            
-            // Calculate position centered on selected button
-            const selectedButtonOffset = selectedButtonIndex - startIndex;
-            const selectedButtonLeftEdge = gridCenterX - buttonAreaHalfWidth + (selectedButtonOffset * (buttonWidth + buttonGap));
-            const buttonGroupLeftEdge = selectedButtonLeftEdge - (selectedButtonOffset * (buttonWidth + buttonGap));
+            if (selectedButtonIndex < startIndex || selectedButtonIndex > endIndex) continue;
+            const buttonAreaWidth = groupWidthFor(numButtons);
+            const buttonGroupLeftEdge = gridCenterX - buttonAreaWidth / 2;
             const buttonGroupRightEdge = buttonGroupLeftEdge + buttonAreaWidth;
-            
-            // Buttons can use space up to searchBarRightPosition (no gap needed since search bar is gone)
-            let maxAllowedButtonRightEdgeAfter = searchBarRightPosition;
-            let minAllowedButtonLeftEdgeAfter = MIN_BUTTON_LEFT_EDGE;
-            
-            // Add hysteresis
+            let maxAllowed = maxRight;
+            let minAllowed = minLeft;
             if (numButtons > lastVisibleButtonsRef.current) {
-              maxAllowedButtonRightEdgeAfter -= hysteresisBuffer;
-              minAllowedButtonLeftEdgeAfter += hysteresisBuffer;
+              maxAllowed -= hysteresisBuffer;
+              minAllowed += hysteresisBuffer;
             } else if (numButtons < lastVisibleButtonsRef.current) {
-              maxAllowedButtonRightEdgeAfter += hysteresisBuffer;
-              minAllowedButtonLeftEdgeAfter -= hysteresisBuffer;
+              maxAllowed += hysteresisBuffer;
+              if (!protectLeft) minAllowed -= hysteresisBuffer;
             }
-            
-            if (buttonGroupLeftEdge >= minAllowedButtonLeftEdgeAfter && buttonGroupRightEdge <= maxAllowedButtonRightEdgeAfter) {
-              bestFitAfter = { numButtons, startIndex, endIndex };
-              newVisibleButtonsAfterSearchBarGone = numButtons;
+            if (buttonGroupLeftEdge >= minAllowed && buttonGroupRightEdge <= maxAllowed) {
+              fit = { numButtons, startIndex, endIndex };
               break;
             }
           }
-          if (bestFitAfter) break;
+          if (fit) break;
         }
-        
-        // If no configuration fits, show at least the selected button
-        if (!bestFitAfter) {
-          newVisibleButtonsAfterSearchBarGone = 1;
-          bestFitAfter = { numButtons: 1, startIndex: selectedButtonIndex, endIndex: selectedButtonIndex };
-        }
-        
-        // Only update if we can show more buttons now that search bar is gone
-        if (newVisibleButtonsAfterSearchBarGone > newVisibleButtons || 
-            (bestFitAfter && bestFitAfter.startIndex !== calculatedButtonStartIndex)) {
-          newVisibleButtons = newVisibleButtonsAfterSearchBarGone;
-          const recalcButtonStartIndex = bestFitAfter.startIndex;
-          const recalcButtonEndIndex = bestFitAfter.endIndex;
-          
-          // Recalculate button position centered on selected button
-          const recalcButtonAreaWidth = newVisibleButtons * buttonWidth + Math.max(0, (newVisibleButtons - 1) * buttonGap);
-          const recalcButtonAreaHalfWidth = recalcButtonAreaWidth / 2;
-          const recalcSelectedButtonOffset = selectedButtonIndex - recalcButtonStartIndex;
-          const recalcSelectedButtonLeftEdge = gridCenterX - recalcButtonAreaHalfWidth + (recalcSelectedButtonOffset * (buttonWidth + buttonGap));
-          const recalcButtonGroupLeftEdge = recalcSelectedButtonLeftEdge - (recalcSelectedButtonOffset * (buttonWidth + buttonGap));
-          const recalcButtonGroupCenterX = recalcButtonGroupLeftEdge + recalcButtonAreaHalfWidth;
-          const recalcRoundedButtonCenterX = Math.round(recalcButtonGroupCenterX * 100) / 100;
-          
-          // Calculate rightmost button edge
-          const recalcRightmostButtonLeftEdge = recalcButtonGroupLeftEdge + (recalcButtonEndIndex - recalcButtonStartIndex) * (buttonWidth + buttonGap);
-          finalYearButtonRightEdge = recalcRightmostButtonLeftEdge + buttonWidth;
-          
-          // Update visible buttons and start index
-          if (newVisibleButtons !== lastVisibleButtonsRef.current || recalcButtonStartIndex !== buttonStartIndex) {
-            setVisibleButtons(newVisibleButtons);
-            setButtonStartIndex(recalcButtonStartIndex);
-            lastVisibleButtonsRef.current = newVisibleButtons;
+        return fit || { numButtons: 1, startIndex: selectedButtonIndex, endIndex: selectedButtonIndex };
+      };
+
+      const metricsFor = (fit) => {
+        const width = groupWidthFor(fit.numButtons);
+        const left = gridCenterX - width / 2;
+        const rightmost = left + (fit.endIndex - fit.startIndex) * (buttonWidth + buttonGap) + buttonWidth;
+        return {
+          fit,
+          numButtons: fit.numButtons,
+          startIndex: fit.startIndex,
+          endIndex: fit.endIndex,
+          left,
+          center: left + width / 2,
+          rightmost,
+        };
+      };
+
+      const layoutHeader = (minLeft, protectLeft) => {
+        const activeOnly = { numButtons: 1, startIndex: selectedButtonIndex, endIndex: selectedButtonIndex };
+        let result = metricsFor(
+          dashboardFullyOpen
+            ? activeOnly
+            : findBestFit(minLeft, searchBarRightPosition - SEARCH_BAR_GAP, protectLeft)
+        );
+        const maxSearchBarLeftPosition = searchBarRightPosition - maxSearchBarWidth;
+        const minSearchBarLeftPosition = result.rightmost + SEARCH_BAR_GAP;
+        let searchBarLeftPosition = Math.max(maxSearchBarLeftPosition, minSearchBarLeftPosition);
+        let finalSearchBarWidth = Math.max(0, searchBarRightPosition - searchBarLeftPosition);
+        if (finalSearchBarWidth < 100) {
+          finalSearchBarWidth = 0;
+          if (!dashboardFullyOpen) {
+            const expanded = metricsFor(findBestFit(minLeft, searchBarRightPosition, protectLeft));
+            if (expanded.numButtons > result.numButtons || expanded.startIndex !== result.startIndex) {
+              result = expanded;
+            }
           }
-          
-          // Update button position
-          const recalcNewButtonPosition = {
-            left: `${recalcRoundedButtonCenterX}px`,
-            transform: 'translateX(-50%)'
-          };
-          if (recalcNewButtonPosition.left !== lastButtonPosition.left || recalcNewButtonPosition.transform !== lastButtonPosition.transform) {
-            setButtonPosition(recalcNewButtonPosition);
-            lastButtonPosition = recalcNewButtonPosition;
+        }
+        return { ...result, finalSearchBarWidth };
+      };
+
+      const applyLayout = (layout) => {
+        lastVisibleButtonsRef.current = layout.numButtons;
+        if (
+          layout.numButtons !== appliedLayoutRef.current.numButtons ||
+          layout.startIndex !== appliedLayoutRef.current.startIndex
+        ) {
+          appliedLayoutRef.current = { numButtons: layout.numButtons, startIndex: layout.startIndex };
+          setVisibleButtons(layout.numButtons);
+          setButtonStartIndex(layout.startIndex);
+        }
+        const roundedCenter = Math.round(layout.center * 100) / 100;
+        const newButtonPosition = {
+          left: `${roundedCenter}px`,
+          transform: 'translateX(-50%)',
+        };
+        if (newButtonPosition.left !== lastButtonPositionRef.current.left || newButtonPosition.transform !== lastButtonPositionRef.current.transform) {
+          setButtonPosition(newButtonPosition);
+          lastButtonPositionRef.current = newButtonPosition;
+        }
+
+        if (searchInputRef.current) {
+          searchInputRef.current.style.width = `${layout.finalSearchBarWidth}px`;
+          setSearchBarWidth(layout.finalSearchBarWidth);
+          if (layout.finalSearchBarWidth === 0) {
+            searchInputRef.current.style.opacity = '0';
+            searchInputRef.current.style.pointerEvents = 'none';
+          } else {
+            searchInputRef.current.style.opacity = '1';
+            searchInputRef.current.style.pointerEvents = 'auto';
           }
-          
-          // Update calculatedButtonStartIndex for use in search bar calculation below
-          calculatedButtonStartIndex = recalcButtonStartIndex;
-          calculatedButtonEndIndex = recalcButtonEndIndex;
         }
-      }
-      
-      // Update search bar width
-      if (searchInputRef.current) {
-        searchInputRef.current.style.width = `${finalSearchBarWidth}px`;
-        // Update state for dropdown width synchronization
-        setSearchBarWidth(finalSearchBarWidth);
-        // Hide search bar if width is 0
-        if (finalSearchBarWidth === 0) {
-          searchInputRef.current.style.opacity = '0';
-          searchInputRef.current.style.pointerEvents = 'none';
-        } else {
-          searchInputRef.current.style.opacity = '1';
-          searchInputRef.current.style.pointerEvents = 'auto';
+        if (dropdownRef.current) {
+          dropdownRef.current.style.width = `${layout.finalSearchBarWidth}px`;
         }
+        setSearchBarPosition({
+          left: 'auto',
+          right: `${headerWidth - searchBarRightPosition}px`,
+          top: '50%',
+          transform: 'translateY(-50%)',
+        });
+      };
+
+      const logoBox = logoRef.current?.querySelector('img') || logoRef.current;
+      const logoRightPx = logoBox
+        ? logoBox.getBoundingClientRect().right - headerRect.left
+        : LOGO_LEFT_INSET + LOGO_WIDTH;
+      const clashAt = logoRightPx + LOGO_BUTTON_GAP;
+
+      const withLogo = layoutHeader(clashAt, true);
+      const hideLogo = logoVisibleRef.current
+        ? withLogo.left < clashAt
+        : withLogo.left < clashAt + hysteresisBuffer;
+      if (hideLogo) {
+        if (logoVisibleRef.current) {
+          logoVisibleRef.current = false;
+          setLogoVisible(false);
+        }
+        applyLayout(layoutHeader(HIDDEN_LOGO_LEFT_INSET, true));
+      } else {
+        if (!logoVisibleRef.current) {
+          logoVisibleRef.current = true;
+          setLogoVisible(true);
+        }
+        applyLayout(withLogo);
       }
-      
-      // Update dropdown width directly to match search bar
-      if (dropdownRef.current) {
-        dropdownRef.current.style.width = `${finalSearchBarWidth}px`;
-      }
-      
-      // Set search bar position - right-aligned with fixed gap from calendar grid right edge
-      // Right edge stays fixed, width shrinks from the left
-      // Convert searchBarRightPosition (relative to left) to right position (relative to right)
-      const searchBarRightPositionCss = headerWidth - searchBarRightPosition;
-      setSearchBarPosition({
-        left: 'auto',
-        right: `${searchBarRightPositionCss}px`, // Right edge position (8px from calendar grid right edge)
-        top: '50%',
-        transform: 'translateY(-50%)'
-      });
-      
-      // Track header width changes
+
       if (headerWidth !== lastHeaderWidth) {
         lastHeaderWidth = headerWidth;
       }
@@ -649,7 +532,7 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
       }
       clearInterval(contentCheckInterval);
     };
-  }, [viewMode]); // Re-run when viewMode changes to observe the correct calendar content element
+  }, [viewMode, sidebarWidth, dashboardFullyOpen]);
 
   // Sync dropdown width with search bar width
   useEffect(() => {
@@ -686,9 +569,12 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
     <div className="calendar-header" ref={headerRef}>
       <button
         type="button"
-        className="calendar-brand-logo"
+        ref={logoRef}
+        className={`calendar-brand-logo${logoVisible ? '' : ' is-hidden'}`}
         onClick={requestShowLanding}
         aria-label="Go to Aridia home"
+        aria-hidden={!logoVisible}
+        tabIndex={logoVisible ? 0 : -1}
       >
         <img
           src={aridiaLogo}

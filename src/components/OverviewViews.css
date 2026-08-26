@@ -22,6 +22,10 @@
   background: white;
 }
 
+.year-view {
+  container-type: inline-size;
+}
+
 .overview-nav-bar {
   position: absolute;
   top: 1.2rem;
@@ -62,6 +66,14 @@
   min-height: 0;
   overflow: auto;
   padding: 4.2rem 1.25rem 1.25rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.year-view-body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  background: transparent;
 }
 
 .year-month-grid {
@@ -69,6 +81,33 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1.25rem 1.5rem;
   height: 100%;
+}
+
+.year-month-grid--focus {
+  height: 100%;
+}
+
+@container (max-width: 900px) {
+  .year-month-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    height: auto;
+  }
+
+  .year-view .mcg-compact {
+    height: auto;
+  }
+
+  .year-view .mcg-compact .mcg-days {
+    flex: none;
+    min-height: 12rem;
+  }
+}
+
+@container (max-width: 480px) {
+  .year-month-grid {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
 }
 
 .month-view-body {
@@ -351,17 +390,7 @@
   color: #777;
 }
 
-@media (max-width: 1100px) {
-  .year-month-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 800px) {
-  .year-month-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .day-detail-panel {
     width: 240px;
   }

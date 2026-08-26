@@ -18,10 +18,12 @@ export default function YearView({
   const today = startOfDay(new Date());
   const itemsByDate = useMemo(() => buildItemsByDate(tasks), [tasks]);
 
-  const months = useMemo(
-    () => Array.from({ length: 12 }, (_, i) => new Date(year, i, 1)),
-    [year]
-  );
+  const months = useMemo(() => {
+    const all = Array.from({ length: 12 }, (_, i) => new Date(year, i, 1));
+    if (!panelDate || panelDate.getFullYear() !== year) return all;
+    const start = Math.floor(panelDate.getMonth() / 4) * 4;
+    return all.slice(start, start + 4);
+  }, [year, panelDate]);
 
   const goToday = () => setCenterDay(today);
   const goPrev = () => setCenterDay(addYears(startOfDay(centerDay), -1));
@@ -38,7 +40,7 @@ export default function YearView({
         nextLabel="Next year"
       />
       <div className="year-view-body">
-        <div className="year-month-grid">
+        <div className={`year-month-grid${months.length === 4 ? ' year-month-grid--focus' : ''}`}>
           {months.map((monthDate) => (
             <MonthCalendarGrid
               key={monthDate.getMonth()}

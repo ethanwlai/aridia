@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { buildTestItems } from '../data/testItems';
 
 export const TASKS_STORAGE_KEY = 'aridia-tasks';
 export const PENDING_AUTH_KEY = 'aridia-pending-auth';
@@ -25,13 +26,17 @@ function toIntOrNull(value) {
 }
 
 export function loadLocalTasks() {
+  const seed = buildTestItems();
   try {
     const saved = localStorage.getItem(TASKS_STORAGE_KEY);
-    if (!saved) return [];
+    if (!saved) return seed;
     const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed) || parsed.length === 0) return seed;
+    const have = new Set(parsed.map((item) => item.id));
+    const missing = seed.filter((item) => !have.has(item.id));
+    return missing.length ? [...parsed, ...missing] : parsed;
   } catch {
-    return [];
+    return seed;
   }
 }
 

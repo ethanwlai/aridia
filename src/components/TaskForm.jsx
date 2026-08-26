@@ -752,8 +752,8 @@ const TASKFORM_THEMES = {
     trackUnused: '#4b5563',
     cancelBorder: '#a084e8',
     cancelText: 'white',
-    submitBg: '#a084e8',
-    submitHover: '#8b5cf6',
+    submitBg: '#6c63ff',
+    submitHover: '#5b54e6',
     submitText: 'white',
     placeholder: '#9ca3af',
   },
@@ -2276,6 +2276,7 @@ const TaskForm = ({
             >
               <input
                 type="range"
+                className="taskform-level-slider"
                 min="1"
                 max="5"
                 step="0.01"
@@ -2330,6 +2331,7 @@ const TaskForm = ({
             >
               <input
                 type="range"
+                className="taskform-level-slider"
                 min="1"
                 max="5"
                 step="0.01"
