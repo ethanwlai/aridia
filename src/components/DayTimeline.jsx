@@ -29,6 +29,7 @@ const SCROLL_EDGE = 48;
 const SCROLL_BASE_SPEED = 14;
 const CREATE_DURATION_MINUTES = 30;
 const CREATE_DRAG_THRESHOLD = 6;
+const CREATE_START_SNAP_MINUTES = 15;
 const CREATE_SNAP_MINUTES = 5;
 
 function rangeFromCreateDrag(originMinutes, currentMinutes) {
@@ -327,7 +328,7 @@ export default function DayTimeline({
     if (e.target.closest('.day-time-block') || e.target.closest('.day-agenda')) return;
 
     abortAllDrags();
-    const originMinutes = yToSnappedMinutes(e.clientY, CREATE_SNAP_MINUTES);
+    const originMinutes = yToSnappedMinutes(e.clientY, CREATE_START_SNAP_MINUTES);
     const initial = {
       originX: e.clientX,
       originY: e.clientY,
