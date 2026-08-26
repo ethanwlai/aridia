@@ -12,18 +12,24 @@ import './DayView.css';
 
 const DRAG_THRESHOLD = 6;
 const CREATE_DURATION_MINUTES = 30;
+const CREATE_MIN_DURATION_MINUTES = 5;
 
-function buildCreateSession(dayStart, startMinutes) {
-  const clamped = Math.max(0, Math.min(24 * 60 - CREATE_DURATION_MINUTES, startMinutes));
-  const start = new Date(dayStart);
-  start.setHours(0, clamped, 0, 0);
-  const end = new Date(start);
-  end.setMinutes(end.getMinutes() + CREATE_DURATION_MINUTES);
+function buildCreateSession(dayStart, startMinutes, endMinutes) {
+  const minDuration = endMinutes == null ? CREATE_DURATION_MINUTES : CREATE_MIN_DURATION_MINUTES;
+  let start = Number(startMinutes) || 0;
+  let end = endMinutes == null ? start + CREATE_DURATION_MINUTES : Number(endMinutes);
+  if (end <= start) end = start + minDuration;
+  start = Math.max(0, Math.min(24 * 60 - minDuration, start));
+  end = Math.max(start + minDuration, Math.min(24 * 60, end));
+  const startDate = new Date(dayStart);
+  startDate.setHours(0, start, 0, 0);
+  const endDate = new Date(dayStart);
+  endDate.setHours(0, end, 0, 0);
   return {
-    startMinutes: clamped,
-    endMinutes: clamped + CREATE_DURATION_MINUTES,
-    start,
-    end,
+    startMinutes: start,
+    endMinutes: end,
+    start: startDate,
+    end: endDate,
   };
 }
 
@@ -72,8 +78,8 @@ const DayView = ({
     setCreateSession(null);
   }, []);
 
-  const handleCreateAt = useCallback((startMinutes) => {
-    setCreateSession(buildCreateSession(selectedDate, startMinutes));
+  const handleCreateAt = useCallback((startMinutes, endMinutes) => {
+    setCreateSession(buildCreateSession(selectedDate, startMinutes, endMinutes));
   }, [selectedDate]);
 
   const handleCreateTimesChange = useCallback((start, end) => {
