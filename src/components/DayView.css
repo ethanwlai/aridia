@@ -157,7 +157,7 @@
   z-index: 2;
   user-select: none;
   box-sizing: border-box;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .day-time-block.is-active {
@@ -168,6 +168,7 @@
 .day-time-block.is-dragging {
   opacity: 0.35 !important;
   cursor: grabbing;
+  transition: none;
 }
 
 .day-time-block-preview {

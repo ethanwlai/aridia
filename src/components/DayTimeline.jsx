@@ -28,6 +28,24 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const SCROLL_EDGE = 48;
 const SCROLL_BASE_SPEED = 14;
 const CREATE_DURATION_MINUTES = 30;
+const CREATE_DRAG_THRESHOLD = 6;
+const CREATE_SNAP_MINUTES = 5;
+
+function rangeFromCreateDrag(originMinutes, currentMinutes) {
+  const step = CREATE_SNAP_MINUTES;
+  let start = Math.min(originMinutes, currentMinutes);
+  let end = Math.max(originMinutes, currentMinutes);
+  if (end - start < step) {
+    if (currentMinutes >= originMinutes) {
+      end = start + step;
+    } else {
+      start = end - step;
+    }
+  }
+  start = Math.max(0, Math.min(24 * 60 - step, start));
+  end = Math.max(start + step, Math.min(24 * 60, end));
+  return { startMinutes: start, endMinutes: end };
+}
 
 function getBlockGeometry(item) {
   const start = parseTimeToMinutes(item.startTime);
@@ -69,22 +87,33 @@ export default function DayTimeline({
   const [activeId, setActiveId] = useState(null);
   const [nowPos, setNowPos] = useState(null);
   const [dragState, setDragState] = useState(null);
+  const [createDrag, setCreateDrag] = useState(null);
   const [colWidth, setColWidth] = useState(0);
   const userHasScrolled = useRef(false);
   const justDraggedRef = useRef(false);
   const dragStateRef = useRef(null);
   dragStateRef.current = dragState;
+  const createDragRef = useRef(null);
+  createDragRef.current = createDrag;
+  const stopCreateDragListenersRef = useRef(null);
+  const stopBlockDragListenersRef = useRef(null);
+  const dayStartRef = useRef(null);
   const onUpdateTaskRef = useRef(onUpdateTask);
   onUpdateTaskRef.current = onUpdateTask;
   const onExternalDragEndRef = useRef(onExternalDragEnd);
   onExternalDragEndRef.current = onExternalDragEnd;
   const onHighlightItemRef = useRef(onHighlightItem);
   onHighlightItemRef.current = onHighlightItem;
+  const onCreateAtRef = useRef(onCreateAt);
+  onCreateAtRef.current = onCreateAt;
+  const onCancelCreateRef = useRef(onCancelCreate);
+  onCancelCreateRef.current = onCancelCreate;
   const externalDragItemRef = useRef(externalDragItem);
   externalDragItemRef.current = externalDragItem;
 
   const dayKey = formatDateKey(day);
   const dayStart = useMemo(() => startOfDay(day), [dayKey]);
+  dayStartRef.current = dayStart;
   const isToday = isSameDate(dayStart, startOfDay(new Date()));
   const timedItems = useMemo(
     () => items.filter((item) => item.startTime && item.endTime),
@@ -138,13 +167,16 @@ export default function DayTimeline({
     if (match) setActiveId(match.id);
   }, [scrollToId, timedItems]);
 
-  const yToMinutes = useCallback((clientY) => {
-    if (!dayColumnRef.current || !scrollRef.current) return 0;
+  const yToSnappedMinutes = useCallback((clientY, step = 15) => {
+    if (!dayColumnRef.current) return 0;
     const rect = dayColumnRef.current.getBoundingClientRect();
     const y = clientY - rect.top;
-    const minutes = snapMinutes((y / ROW_HEIGHT) * 60);
-    return Math.max(0, Math.min(24 * 60 - 15, minutes));
+    return Math.max(0, Math.min(24 * 60, snapMinutes((y / ROW_HEIGHT) * 60, step)));
   }, []);
+
+  const yToMinutes = useCallback((clientY, step = 15) => {
+    return Math.min(24 * 60 - step, yToSnappedMinutes(clientY, step));
+  }, [yToSnappedMinutes]);
 
   const closeCreate = useCallback(() => {
     onCancelCreate?.();
@@ -165,47 +197,6 @@ export default function DayTimeline({
     }
     const minutes = Math.max(0, Math.min(24 * 60 - CREATE_DURATION_MINUTES, yToMinutes(e.clientY)));
     onCreateAt?.(minutes);
-  };
-
-  const handleBlockMouseDown = (e, item) => {
-    if (
-      e.target.closest('.task-complete-btn') ||
-      e.target.closest('.task-delete-btn') ||
-      e.target.closest('.task-edit-btn') ||
-      e.target.closest('.task-actions-dropdown-trigger') ||
-      e.target.closest('.task-actions-dropdown-menu')
-    ) {
-      e.stopPropagation();
-      closeCreate();
-      return;
-    }
-
-    e.preventDefault();
-    e.stopPropagation();
-    closeCreate();
-    setActiveId(item.id);
-    toggleCalendarHighlight(highlightedItem, onHighlightItem, item);
-
-    if (window.openDropdownRef?.current) {
-      window.openDropdownRef.current.setIsOpen(false);
-      window.openDropdownRef.current.setActiveSubmenu(null);
-      window.openDropdownRef.current = null;
-    }
-
-    const geo = getBlockGeometry(item);
-    if (!geo) return;
-    const blockRect = e.currentTarget.getBoundingClientRect();
-    const clickOffsetY = e.clientY - blockRect.top;
-
-    setDragState({
-      item,
-      source: 'block',
-      clickOffsetY,
-      previewTop: geo.top,
-      previewStart: geo.start,
-      moved: false,
-      overGrid: true,
-    });
   };
 
   const autoScrollAt = useCallback((clientY) => {
@@ -232,9 +223,174 @@ export default function DayTimeline({
       && clientY >= rect.top && clientY <= rect.bottom;
   }, []);
 
+  const abortAllDrags = useCallback(({ keepBlock = false, keepCreate = false } = {}) => {
+    if (!keepCreate) {
+      stopCreateDragListenersRef.current?.();
+      createDragRef.current = null;
+      setCreateDrag(null);
+    }
+    if (!keepBlock) {
+      stopBlockDragListenersRef.current?.();
+      dragStateRef.current = null;
+      setDragState(null);
+    }
+  }, []);
+
+  const handleBlockMouseDown = (e, item) => {
+    if (
+      e.target.closest('.task-complete-btn') ||
+      e.target.closest('.task-delete-btn') ||
+      e.target.closest('.task-edit-btn') ||
+      e.target.closest('.task-actions-dropdown-trigger') ||
+      e.target.closest('.task-actions-dropdown-menu')
+    ) {
+      e.stopPropagation();
+      closeCreate();
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    abortAllDrags();
+    closeCreate();
+    setActiveId(item.id);
+    toggleCalendarHighlight(highlightedItem, onHighlightItem, item);
+
+    if (window.openDropdownRef?.current) {
+      window.openDropdownRef.current.setIsOpen(false);
+      window.openDropdownRef.current.setActiveSubmenu(null);
+      window.openDropdownRef.current = null;
+    }
+
+    const geo = getBlockGeometry(item);
+    if (!geo) return;
+    const clickOffsetY = e.clientY - e.currentTarget.getBoundingClientRect().top;
+    const dragId = item.id;
+    const initial = {
+      item,
+      source: 'block',
+      clickOffsetY,
+      previewTop: geo.top,
+      previewStart: geo.start,
+      moved: false,
+      overGrid: true,
+    };
+    dragStateRef.current = initial;
+    setDragState(initial);
+
+    const onMove = (moveEvent) => {
+      const current = dragStateRef.current;
+      if (!current || current.source !== 'block' || current.item?.id !== dragId) return;
+      autoScrollAt(moveEvent.clientY);
+      const minutes = yToMinutes(moveEvent.clientY - current.clickOffsetY);
+      const next = {
+        ...current,
+        previewTop: (minutes / 60) * ROW_HEIGHT,
+        previewStart: minutes,
+        moved: true,
+        overGrid: true,
+      };
+      dragStateRef.current = next;
+      setDragState(next);
+    };
+
+    const onUp = () => {
+      stopBlockDragListenersRef.current?.();
+      const current = dragStateRef.current;
+      if (!current || current.source !== 'block' || current.item?.id !== dragId) return;
+      dragStateRef.current = null;
+      setDragState(null);
+      if (current.moved) markJustDragged();
+      if (current.moved && current.item?.id != null) {
+        onUpdateTaskRef.current?.(
+          current.item.id,
+          timeUpdatesForDrop(
+            dayStartRef.current,
+            current.previewStart ?? 0,
+            getItemDurationMinutes(current.item)
+          )
+        );
+      }
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    stopBlockDragListenersRef.current = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      stopBlockDragListenersRef.current = null;
+    };
+  };
+
+  const handleColumnMouseDown = (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest('.day-time-block') || e.target.closest('.day-agenda')) return;
+
+    abortAllDrags();
+    const originMinutes = yToSnappedMinutes(e.clientY, CREATE_SNAP_MINUTES);
+    const initial = {
+      originX: e.clientX,
+      originY: e.clientY,
+      originMinutes,
+      currentMinutes: originMinutes,
+      active: false,
+    };
+    createDragRef.current = initial;
+
+    const onMove = (moveEvent) => {
+      const current = createDragRef.current;
+      if (!current) return;
+      autoScrollAt(moveEvent.clientY);
+      const dx = moveEvent.clientX - current.originX;
+      const dy = moveEvent.clientY - current.originY;
+      const active = current.active || Math.hypot(dx, dy) >= CREATE_DRAG_THRESHOLD;
+      if (!active) return;
+      if (moveEvent.cancelable) moveEvent.preventDefault();
+      if (!current.active) onCancelCreateRef.current?.();
+      const next = {
+        ...current,
+        currentMinutes: yToSnappedMinutes(moveEvent.clientY, CREATE_SNAP_MINUTES),
+        active: true,
+      };
+      createDragRef.current = next;
+      setCreateDrag(next);
+    };
+
+    const onUp = (upEvent) => {
+      stopCreateDragListenersRef.current?.();
+      const current = createDragRef.current;
+      createDragRef.current = null;
+      setCreateDrag(null);
+      if (!current?.active) return;
+      markJustDragged();
+      if (!isOverScrollArea(upEvent.clientX, upEvent.clientY)) return;
+      const { startMinutes, endMinutes } = rangeFromCreateDrag(
+        current.originMinutes,
+        current.currentMinutes
+      );
+      onCreateAtRef.current?.(startMinutes, endMinutes);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    stopCreateDragListenersRef.current = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      stopCreateDragListenersRef.current = null;
+    };
+  };
+
+  useEffect(() => () => {
+    stopCreateDragListenersRef.current?.();
+    stopBlockDragListenersRef.current?.();
+  }, []);
+
   useLayoutEffect(() => {
     const item = externalDragItemRef.current;
     if (item == null || item.id == null) return undefined;
+
+    abortAllDrags();
+    onCancelCreateRef.current?.();
 
     const initial = {
       item,
@@ -294,50 +450,7 @@ export default function DayTimeline({
     yToMinutes,
     dayStart,
     markJustDragged,
-  ]);
-
-  useEffect(() => {
-    if (!dragState || dragState.source === 'agenda') return undefined;
-
-    const onMove = (e) => {
-      const current = dragStateRef.current;
-      if (!current || current.source === 'agenda') return;
-      autoScrollAt(e.clientY);
-      const minutes = yToMinutes(e.clientY - current.clickOffsetY);
-      setDragState((prev) => prev && ({
-        ...prev,
-        previewTop: (minutes / 60) * ROW_HEIGHT,
-        previewStart: minutes,
-        moved: true,
-        overGrid: true,
-      }));
-    };
-
-    const onUp = () => {
-      const current = dragStateRef.current;
-      setDragState(null);
-      if (current?.moved) markJustDragged();
-      if (current?.source === 'block' && current.moved && current.item?.id != null) {
-        onUpdateTaskRef.current?.(
-          current.item.id,
-          timeUpdatesForDrop(dayStart, current.previewStart ?? 0, getItemDurationMinutes(current.item))
-        );
-      }
-    };
-
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-  }, [
-    Boolean(dragState) && dragState?.source !== 'agenda',
-    dragState?.item?.id,
-    yToMinutes,
-    dayStart,
-    autoScrollAt,
-    markJustDragged,
+    abortAllDrags,
   ]);
 
   useEffect(() => {
@@ -370,7 +483,7 @@ export default function DayTimeline({
   }, [createSession, closeCreate]);
 
   return (
-    <div className={`day-timeline${dragState ? ' is-dragging' : ''}`}>
+    <div className={`day-timeline${dragState || createDrag?.active ? ' is-dragging' : ''}`}>
       <div
         className="day-timeline-scroll"
         ref={scrollRef}
@@ -389,6 +502,7 @@ export default function DayTimeline({
             className="day-timeline-daycol"
             ref={dayColumnRef}
             onClick={handleColumnClick}
+            onMouseDown={handleColumnMouseDown}
           >
             {HOURS.map((hour) => (
               <div key={hour} className="day-timeline-slot" style={{ height: ROW_HEIGHT }} />
@@ -536,10 +650,16 @@ export default function DayTimeline({
               );
             })}
 
-            {createSession && (() => {
-              const visibleEnd = Math.min(createSession.endMinutes, 24 * 60);
-              const duration = Math.max(15, visibleEnd - createSession.startMinutes);
-              const top = (createSession.startMinutes / 60) * ROW_HEIGHT;
+            {(() => {
+              const draftRange = createDrag?.active
+                ? rangeFromCreateDrag(createDrag.originMinutes, createDrag.currentMinutes)
+                : createSession
+                  ? { startMinutes: createSession.startMinutes, endMinutes: createSession.endMinutes }
+                  : null;
+              if (!draftRange) return null;
+              const visibleEnd = Math.min(draftRange.endMinutes, 24 * 60);
+              const duration = Math.max(CREATE_SNAP_MINUTES, visibleEnd - draftRange.startMinutes);
+              const top = (draftRange.startMinutes / 60) * ROW_HEIGHT;
               const height = getDayBlockHeightPx(duration, ROW_HEIGHT);
               const { left, width } = getLanedBlockBounds(
                 0,
@@ -547,16 +667,16 @@ export default function DayTimeline({
                 0,
                 1
               );
-              const endLabel = createSession.endMinutes >= 24 * 60
+              const endLabel = draftRange.endMinutes >= 24 * 60
                 ? '00:00'
-                : formatMinutes(createSession.endMinutes);
+                : formatMinutes(draftRange.endMinutes);
               return (
                 <div
                   className={`day-time-block-draft${height < SHORT_BLOCK.dayInlineBelow ? ' is-short' : ''}`}
                   style={{ top, left, width, height }}
                 >
                   <div className="day-time-block-draft-time">
-                    {formatShortTimeRange(formatMinutes(createSession.startMinutes), endLabel)}
+                    {formatShortTimeRange(formatMinutes(draftRange.startMinutes), endLabel)}
                   </div>
                 </div>
               );
@@ -599,7 +719,7 @@ export default function DayTimeline({
           </div>
         </div>
       </div>
-      <p className="day-timeline-hint">Click an empty slot to create · Drag a block or list item to schedule</p>
+      <p className="day-timeline-hint">Click or drag an empty slot to create · Drag a block to schedule</p>
     </div>
   );
 }
