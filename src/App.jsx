@@ -1256,6 +1256,7 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                 tasks={tasks}
                 onSearch={setSearchResults}
                 sidebarWidth={sidebarBaseWidth + dashboardWidth}
+                dashboardFullyOpen={dragProgress === 1}
                 onHighlightItem={setHighlightedItem}
               />
               {viewMode === 'week' && (

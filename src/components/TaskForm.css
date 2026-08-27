@@ -356,3 +356,12 @@ label, div, span, button, select {
 .pill-time.active {
   background: #5146d8;
 }
+
+.taskform-level-slider::-webkit-slider-thumb {
+  background: #6c63ff;
+}
+
+.taskform-level-slider::-moz-range-thumb {
+  background: #6c63ff;
+  border: none;
+}
