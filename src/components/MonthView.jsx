@@ -12,6 +12,8 @@ export default function MonthView({
   panelDate = null,
   onDayClick,
   onDayDoubleClick,
+  highlightedItem = null,
+  onHighlightItem,
 }) {
   const today = startOfDay(new Date());
   const monthDate = useMemo(
@@ -45,6 +47,8 @@ export default function MonthView({
           onDayClick={onDayClick}
           onDayDoubleClick={onDayDoubleClick}
           onMoreClick={onDayClick}
+          highlightedItem={highlightedItem}
+          onHighlightItem={onHighlightItem}
         />
       </div>
     </div>

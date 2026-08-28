@@ -76,7 +76,6 @@ export default function DayTimeline({
   onAutoSchedule,
   onQuickMove,
   onExtendDuration,
-  scrollToId = null,
   externalDragItem = null,
   onExternalDragEnd,
   createSession = null,
@@ -153,20 +152,21 @@ export default function DayTimeline({
   }, [isToday, getCurrentTimePosition, dayStart]);
 
   useEffect(() => {
+    if (highlightedItem) return;
     if (userHasScrolled.current || !scrollRef.current) return;
     const target = isToday ? getCurrentTimePosition() : 8 * ROW_HEIGHT;
     scrollRef.current.scrollTop = Math.max(0, target - 120);
-  }, [dayStart, isToday, getCurrentTimePosition]);
+  }, [dayStart, isToday, getCurrentTimePosition, highlightedItem]);
 
   useEffect(() => {
-    if (!scrollToId || !scrollRef.current) return;
-    const id = String(scrollToId).split(':')[0];
+    if (!highlightedItem || !scrollRef.current) return;
+    const id = String(highlightedItem.id).split(':')[0];
     const el = scrollRef.current.querySelector(`[data-day-block-id="${id}"]`);
     if (!el) return;
     el.scrollIntoView({ block: 'center', behavior: 'smooth' });
     const match = timedItems.find((item) => String(item.id) === id);
     if (match) setActiveId(match.id);
-  }, [scrollToId, timedItems]);
+  }, [highlightedItem, timedItems]);
 
   const yToSnappedMinutes = useCallback((clientY, step = 15) => {
     if (!dayColumnRef.current) return 0;

@@ -13,7 +13,7 @@
 
 .landing-nav {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
   padding: 1.15rem 2rem;
@@ -27,16 +27,23 @@
   display: block;
 }
 
+.landing-nav-end {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.4rem;
+}
+
 .landing-nav-actions {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
-  flex-shrink: 0;
 }
 
 .landing-nav-signin,
-.landing-nav-signup,
-.landing-btn {
+.landing-nav-signup {
   font-family: 'Karla', sans-serif;
   font-size: 0.9rem;
   font-weight: 700;
@@ -50,8 +57,7 @@
   padding: 0.35rem 0.65rem;
 }
 
-.landing-nav-signup,
-.landing-btn-primary {
+.landing-nav-signup {
   background: linear-gradient(135deg, #a084e8 0%, #8b5cf6 100%);
   border: none;
   border-radius: 999px;
@@ -73,7 +79,7 @@
   text-align: left;
 }
 
-.landing-hero h1 {
+.landing-copy h1 {
   margin: 0 0 0.85rem;
   font-size: clamp(2.2rem, 4.5vw, 3.4rem);
   font-weight: 300;
@@ -88,30 +94,8 @@
   line-height: 1.5;
 }
 
-.landing-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.7rem;
-}
-
-.landing-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  padding: 0.75rem 1.25rem;
-  font-size: 1rem;
-}
-
-.landing-btn-secondary {
-  background: transparent;
-  border: 1px solid #a084e8;
-}
-
 .landing-guest {
-  margin: 1.35rem 0 0;
+  margin: 0;
   padding: 0;
   border: none;
   background: none;
@@ -122,16 +106,12 @@
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 3px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .landing-guest:hover {
   color: white;
-}
-
-.landing-cloud-note {
-  margin: 0.55rem 0 0;
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 0.85rem;
 }
 
 @keyframes landing-fade {
@@ -158,10 +138,6 @@
     text-align: center;
   }
 
-  .landing-actions {
-    justify-content: center;
-  }
-
   .landing-lead {
     margin-left: auto;
     margin-right: auto;
@@ -170,6 +146,4 @@
 
 @media (max-width: 640px) {
   .landing-nav {
-    padding: 1rem 1.15rem;
-  }
-}
+    paddi

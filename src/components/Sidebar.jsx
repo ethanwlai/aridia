@@ -5,7 +5,7 @@ import Header from './Header';
 import AccountMenu from './AccountMenu';
 import TaskActionsDropdown from './TaskActionsDropdown';
 
-import { getItemColor } from '../utils/calendarItems';
+import { getItemColor, scrollHighlightedIntoView } from '../utils/calendarItems';
 
 // Utility: Parse YYYY-MM-DD as local date
 function parseLocalDate(dateStr) {
@@ -370,6 +370,7 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
   }, []);
   
   useEffect(() => {
+    if (highlightedItem) return;
     if (sidebarContentRef.current && centerDay) {
       // Calculate the leftmost day of the current calendar week (centerDay - 2)
       const leftmostDay = new Date(centerDay);
@@ -405,7 +406,7 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
         }
       }
     }
-  }, [centerDay, expandDay]); // Trigger when centerDay changes (navigation)
+  }, [centerDay, expandDay, highlightedItem]); // Trigger when centerDay changes (navigation)
 
   // Expand the highlighted task's day, then scroll it into view
   useEffect(() => {
@@ -421,24 +422,10 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
 
     // Wait a frame so the task list can mount after expand
     const frameId = requestAnimationFrame(() => {
-      if (!sidebarContentRef.current) return;
-      const taskElement = sidebarContentRef.current.querySelector(`[data-task-id="${highlightedItem.id}"]`);
-      if (!taskElement) return;
-
-      const sidebarRect = sidebarContentRef.current.getBoundingClientRect();
-      const taskRect = taskElement.getBoundingClientRect();
-      const isVisible = (
-        taskRect.top >= sidebarRect.top &&
-        taskRect.bottom <= sidebarRect.bottom
+      scrollHighlightedIntoView(
+        sidebarContentRef.current,
+        `[data-task-id="${highlightedItem.id}"]`
       );
-
-      if (!isVisible) {
-        taskElement.scrollIntoView({
-          behavior: 'smooth',
-          block: 'center',
-          inline: 'nearest'
-        });
-      }
     });
 
     return () => cancelAnimationFrame(frameId);

@@ -14,9 +14,18 @@ export default function LandingPage({ onContinueAsGuest, onOpenCalendar }) {
           width={91}
           height={44}
         />
-        <div className="landing-nav-actions">
-          <Link className="landing-nav-signin" to="/login">Sign in</Link>
-          <Link className="landing-nav-signup" to="/signup">Sign up</Link>
+        <div className="landing-nav-end">
+          <div className="landing-nav-actions">
+            <Link className="landing-nav-signin" to="/login">Sign in</Link>
+            <Link className="landing-nav-signup" to="/signup">Sign up</Link>
+          </div>
+          <button
+            className="landing-guest"
+            type="button"
+            onClick={onOpenCalendar || onContinueAsGuest}
+          >
+            {onOpenCalendar ? 'Open calendar' : 'Continue as guest (local saves only)'}
+          </button>
         </div>
       </nav>
 
@@ -26,18 +35,6 @@ export default function LandingPage({ onContinueAsGuest, onOpenCalendar }) {
           <p className="landing-lead">
             A calendar that plans with your energy — tasks and events, sorted by how motivated you feel.
           </p>
-          <div className="landing-actions">
-            <Link className="landing-btn landing-btn-primary" to="/signup">Sign up</Link>
-            <Link className="landing-btn landing-btn-secondary" to="/login">Sign in</Link>
-          </div>
-          <p className="landing-cloud-note">Sign up or sign in to save onto the cloud.</p>
-          <button
-            className="landing-guest"
-            type="button"
-            onClick={onOpenCalendar || onContinueAsGuest}
-          >
-            {onOpenCalendar ? 'Open calendar' : 'Continue as guest (local saves only)'}
-          </button>
         </div>
         <LandingDemo />
       </main>

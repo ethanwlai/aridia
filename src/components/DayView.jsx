@@ -51,7 +51,6 @@ const DayView = ({
   const selectedDate = startOfDay(centerDay || new Date());
   const dateKey = formatDateKey(selectedDate);
 
-  const [scrollToId, setScrollToId] = useState(null);
   const [agendaDrag, setAgendaDrag] = useState(null);
   const [createSession, setCreateSession] = useState(null);
   const agendaDragRef = useRef(null);
@@ -238,7 +237,6 @@ const DayView = ({
           onAutoSchedule={onAutoSchedule}
           onQuickMove={onQuickMove}
           onExtendDuration={onExtendDuration}
-          scrollToId={scrollToId}
           externalDragItem={isAgendaDragging ? agendaDrag.item : null}
           onExternalDragEnd={handleExternalDragEnd}
           createSession={createSession}
