@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import TaskCreationCard from './TaskCreationCard';
 import TaskForm from './TaskForm';
@@ -8,6 +8,7 @@ import {
   getCalendarHighlightOpacity,
   getItemColor,
   getItemTitle,
+  scrollHighlightedIntoView,
   startOfDay,
   toggleCalendarHighlight,
 } from '../utils/calendarItems';
@@ -35,6 +36,7 @@ function AgendaRow({
   return (
     <div
       className={`day-agenda-row${completed ? ' is-completed' : ''}${isDragging ? ' is-dragging' : ''}`}
+      data-task-id={item.id}
       draggable={false}
       style={{ opacity: getCalendarHighlightOpacity(highlightedItem, item) }}
       onClick={(e) => {
@@ -119,7 +121,16 @@ export default function DayAgenda({
   onTimesChange,
 }) {
   const [showCreate, setShowCreate] = useState(false);
+  const agendaRef = useRef(null);
   const dayStart = startOfDay(day);
+
+  useEffect(() => {
+    if (!highlightedItem) return;
+    scrollHighlightedIntoView(
+      agendaRef.current,
+      `[data-task-id="${highlightedItem.id}"]`
+    );
+  }, [highlightedItem]);
 
   useEffect(() => {
     if (!showCreate) return undefined;
@@ -157,7 +168,7 @@ export default function DayAgenda({
   );
 
   return (
-    <aside className={`day-agenda${createSession ? ' is-creating' : ''}`}>
+    <aside ref={agendaRef} className={`day-agenda${createSession ? ' is-creating' : ''}`}>
       {createSession ? (
         <div className="day-agenda-create-panel">
           <TaskForm

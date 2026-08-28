@@ -263,6 +263,7 @@
   border-radius: 4px;
   line-height: 1;
   overflow: hidden;
+  cursor: pointer;
 }
 
 .mcg-chip-label {

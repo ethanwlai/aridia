@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { format } from 'date-fns';
-import { formatDateKey, getItemColor, getItemTitle, getMonthCells, isSameDate } from '../utils/calendarItems';
+import { formatDateKey, getCalendarHighlightOpacity, getItemColor, getItemTitle, getMonthCells, isSameDate, toggleCalendarHighlight } from '../utils/calendarItems';
 import './OverviewViews.css';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -18,6 +18,8 @@ export default function MonthCalendarGrid({
   onDayDoubleClick,
   onMonthTitleClick,
   onMoreClick,
+  highlightedItem = null,
+  onHighlightItem,
 }) {
   const clickTimerRef = useRef(null);
   const cells = getMonthCells(monthDate);
@@ -92,8 +94,18 @@ export default function MonthCalendarGrid({
                     <div
                       key={item.id || `${getItemTitle(item)}-${item.startTime || ''}`}
                       className="mcg-chip"
-                      style={{ background: getItemColor(item) }}
+                      data-task-id={item.id}
+                      style={{
+                        background: getItemColor(item),
+                        opacity: getCalendarHighlightOpacity(highlightedItem, item),
+                      }}
                       title={getItemTitle(item)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        clearClickTimer();
+                        toggleCalendarHighlight(highlightedItem, onHighlightItem, item);
+                      }}
                     >
                       <span className="mcg-chip-label">{getItemTitle(item)}</span>
                     </div>

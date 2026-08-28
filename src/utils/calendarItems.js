@@ -311,3 +311,26 @@ export function getCalendarHighlightOpacity(highlightedItem, item) {
   if (!highlightedItem) return 1;
   return isCalendarHighlighted(highlightedItem, item) ? 1 : 0.2;
 }
+
+/** Center a highlighted task in a scroll container if it is not fully visible. */
+export function scrollHighlightedIntoView(container, selector) {
+  if (!container || !selector) return false;
+  const el = container.querySelector(selector);
+  if (!el) return false;
+
+  const containerRect = container.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+  const isVisible = (
+    elRect.top >= containerRect.top
+    && elRect.bottom <= containerRect.bottom
+  );
+
+  if (!isVisible) {
+    el.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'nearest',
+    });
+  }
+  return true;
+}

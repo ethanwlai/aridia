@@ -4,12 +4,20 @@ import {
   buildItemsByDate,
   formatDateKey,
   formatItemTime,
+  getCalendarHighlightOpacity,
   getItemColor,
   getItemTitle,
+  toggleCalendarHighlight,
 } from '../utils/calendarItems';
 import './OverviewViews.css';
 
-export default function DayDetailPanel({ date, tasks = [], onClose, onItemClick }) {
+export default function DayDetailPanel({
+  date,
+  tasks = [],
+  onClose,
+  highlightedItem = null,
+  onHighlightItem,
+}) {
   const panelRef = useRef(null);
   const itemsByDate = useMemo(() => buildItemsByDate(tasks), [tasks]);
   const items = date ? (itemsByDate[formatDateKey(date)] || []) : [];
@@ -47,7 +55,9 @@ export default function DayDetailPanel({ date, tasks = [], onClose, onItemClick 
               type="button"
               key={item.id || `${getItemTitle(item)}-${item.startTime || ''}`}
               className="day-detail-item"
-              onClick={() => onItemClick?.(item, date)}
+              data-task-id={item.id}
+              style={{ opacity: getCalendarHighlightOpacity(highlightedItem, item) }}
+              onClick={() => toggleCalendarHighlight(highlightedItem, onHighlightItem, item)}
             >
               <span className="day-detail-swatch" style={{ background: getItemColor(item) }} />
               <span>

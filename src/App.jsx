@@ -58,6 +58,8 @@ const ITEM_SELECTION_SELECTOR = [
   '.calendar-time-block',
   '.day-time-block',
   '.day-agenda-row',
+  '.mcg-chip',
+  '.day-detail-item',
   '[data-task-id]',
 ].join(', ');
 
@@ -1317,6 +1319,8 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                       panelDate={panelDate}
                       onDayClick={setPanelDate}
                       onDayDoubleClick={openDayView}
+                      highlightedItem={highlightedItem}
+                      onHighlightItem={setHighlightedItem}
                     />
                   )}
                   {panelDate && (
@@ -1324,7 +1328,8 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                       date={panelDate}
                       tasks={tasks}
                       onClose={() => setPanelDate(null)}
-                      onItemClick={(_item, date) => openDayView(date)}
+                      highlightedItem={highlightedItem}
+                      onHighlightItem={setHighlightedItem}
                     />
                   )}
                 </div>
