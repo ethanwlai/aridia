@@ -33,7 +33,7 @@ export default function LandingPage({ onContinueAsGuest, onOpenCalendar }) {
         <div className="landing-copy">
           <h1>Keep your day in motion.</h1>
           <p className="landing-lead">
-            A calendar that plans with your energy — tasks and events, sorted by how motivated you feel.
+            Tasks that change with how you feel, so you can get more done.
           </p>
         </div>
         <LandingDemo />
