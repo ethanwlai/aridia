@@ -19,10 +19,25 @@ export const sortTasks = (tasks, motivation) => {
 
   const { w1, w2, w3 } = weightConfigs[motivation] || weightConfigs[3];
 
+  const unscored = (task) => ({
+    ...task,
+    score: 0,
+    mfit: 0,
+    durgency: 0,
+    isDueToday: false,
+    w1,
+    w2,
+    w3,
+  });
+
   const scoredTasks = tasks.map((task, index) => {
-    if (!task || typeof task.deadline !== 'string') {
+    if (!task) {
       console.warn(`sortTasks: Invalid task at index ${index}`, task);
       return null;
+    }
+
+    if (typeof task.deadline !== 'string') {
+      return unscored(task);
     }
 
     // Use the same local date parsing as CalendarGrid to avoid timezone issues
@@ -30,8 +45,7 @@ export const sortTasks = (tasks, motivation) => {
     const deadline = new Date(year, month - 1, day);
     
     if (isNaN(deadline.getTime())) {
-      console.warn(`sortTasks: Invalid deadline for task at index ${index}`, task.deadline);
-      return null;
+      return unscored(task);
     }
 
     // Set to noon to avoid timezone issues
@@ -73,4 +87,20 @@ export const sortTasks = (tasks, motivation) => {
     .sort((a, b) => b.score - a.score);
     
   return result;
+};
+
+export const sortEventsByDeadline = (items) => {
+  if (!Array.isArray(items)) return [];
+
+  return [...items].sort((a, b) => {
+    const deadlineA = typeof a?.deadline === 'string' ? a.deadline : '';
+    const deadlineB = typeof b?.deadline === 'string' ? b.deadline : '';
+    if (deadlineA !== deadlineB) return deadlineA < deadlineB ? -1 : 1;
+
+    const timeA = a?.startTime || '';
+    const timeB = b?.startTime || '';
+    if (timeA !== timeB) return timeA < timeB ? -1 : 1;
+
+    return (a?.title || '').localeCompare(b?.title || '');
+  });
 };

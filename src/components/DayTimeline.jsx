@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import TaskActionsDropdown from './TaskActionsDropdown';
 import ShortBlockLabel from './ShortBlockLabel';
 import StackedBlockLabel from './StackedBlockLabel';
+import NowMarker from './NowMarker';
 import {
   assignOverlapLanes,
   formatDateKey,
@@ -509,11 +510,7 @@ export default function DayTimeline({
               <div key={hour} className="day-timeline-slot" style={{ height: ROW_HEIGHT }} />
             ))}
 
-            {isToday && nowPos != null && (
-              <div className="day-timeline-now" style={{ top: nowPos }}>
-                <span className="day-timeline-now-dot" />
-              </div>
-            )}
+            {isToday && nowPos != null && <NowMarker top={nowPos} />}
 
             {lanedItems.map((item) => {
               const geo = getBlockGeometry(item);

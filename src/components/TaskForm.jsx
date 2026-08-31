@@ -1738,12 +1738,21 @@ const TaskForm = ({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '1.5rem'
+            marginBottom: '1.5rem',
+            minWidth: 0,
+            gap: '0.5rem'
           }}>
-          <div style={{
+          <div
+            className={isDay ? 'taskform-day-title-text' : undefined}
+            style={{
             fontSize: '1rem',
             fontWeight: 600,
-              color: ui.text
+              color: ui.text,
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              flex: 1
             }}>
               {creationType === 'task' ? 'Task' : 'Event'} Creation
             </div>
@@ -1751,6 +1760,7 @@ const TaskForm = ({
             {/* Event/Task Toggle */}
             <div style={{
               display: 'flex',
+              flexShrink: 0,
               background: ui.toggleBg,
               borderRadius: '999px',
               padding: '0.1rem',
@@ -1817,18 +1827,22 @@ const TaskForm = ({
                     setTimeout(() => applyPersonalizedDefaults(), 500);
                   }}
                   required
-                  style={{
-                    width: '100%',
-                    padding: '0.875rem',
-                    borderRadius: '8px',
-                    border: `1px solid ${ui.inputBorder}`,
-                    background: ui.inputBg,
-                    color: ui.inputText,
-                    fontSize: '0.9rem',
-                    fontFamily: "'Karla', sans-serif",
-                    outline: 'none',
-                    transition: 'border-color 0.2s ease'
-                  }}
+            style={{
+              width: '100%',
+              minWidth: 0,
+              padding: '0.875rem',
+              borderRadius: '8px',
+              border: `1px solid ${ui.inputBorder}`,
+              background: ui.inputBg,
+              color: ui.inputText,
+              fontSize: '0.9rem',
+              fontFamily: "'Karla', sans-serif",
+              outline: 'none',
+              transition: 'border-color 0.2s ease',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
                 />
               </div>
               
@@ -1839,18 +1853,20 @@ const TaskForm = ({
                   placeholder="Description (optional)"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.875rem',
-                    borderRadius: '8px',
-                    border: `1px solid ${ui.inputBorder}`,
-                    background: ui.inputBg,
-                    color: ui.inputText,
-                    fontSize: '0.9rem',
-                    fontFamily: "'Karla', sans-serif",
-                    outline: 'none',
-                    transition: 'border-color 0.2s ease'
-                  }}
+            style={{
+              width: '100%',
+              minWidth: 0,
+              padding: '0.875rem',
+              borderRadius: '8px',
+              border: `1px solid ${ui.inputBorder}`,
+              background: ui.inputBg,
+              color: ui.inputText,
+              fontSize: '0.9rem',
+              fontFamily: "'Karla', sans-serif",
+              outline: 'none',
+              transition: 'border-color 0.2s ease',
+              overflow: 'hidden'
+            }}
                 />
               </div>
             </div>
@@ -1875,18 +1891,22 @@ const TaskForm = ({
                     setTimeout(() => applyPersonalizedDefaults(), 500);
                   }}
                   required
-                  style={{
-                    width: '100%',
-                    padding: '0.875rem',
-                    borderRadius: '8px',
-                    border: `1px solid ${ui.inputBorder}`,
-                    background: ui.inputBg,
-                    color: ui.inputText,
-                    fontSize: '0.9rem',
-                    fontFamily: "'Karla', sans-serif",
-                    outline: 'none',
-                    transition: 'border-color 0.2s ease'
-                  }}
+            style={{
+              width: '100%',
+              minWidth: 0,
+              padding: '0.875rem',
+              borderRadius: '8px',
+              border: `1px solid ${ui.inputBorder}`,
+              background: ui.inputBg,
+              color: ui.inputText,
+              fontSize: '0.9rem',
+              fontFamily: "'Karla', sans-serif",
+              outline: 'none',
+              transition: 'border-color 0.2s ease',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
                 />
               </div>
               
@@ -1897,18 +1917,20 @@ const TaskForm = ({
                   placeholder="Description (optional)"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.875rem',
-                    borderRadius: '8px',
-                    border: `1px solid ${ui.inputBorder}`,
-                    background: ui.inputBg,
-                    color: ui.inputText,
-                    fontSize: '0.9rem',
-                    fontFamily: "'Karla', sans-serif",
-                    outline: 'none',
-                    transition: 'border-color 0.2s ease'
-                  }}
+            style={{
+              width: '100%',
+              minWidth: 0,
+              padding: '0.875rem',
+              borderRadius: '8px',
+              border: `1px solid ${ui.inputBorder}`,
+              background: ui.inputBg,
+              color: ui.inputText,
+              fontSize: '0.9rem',
+              fontFamily: "'Karla', sans-serif",
+              outline: 'none',
+              transition: 'border-color 0.2s ease',
+              overflow: 'hidden'
+            }}
                 />
               </div>
             </div>

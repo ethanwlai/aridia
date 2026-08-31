@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import { availableTextWidth, findWeekBlock } from '../utils/blockTextGutter';
 
 /**
  * Stacked title + optional time for taller calendar blocks.
@@ -11,30 +12,39 @@ export default function StackedBlockLabel({
   timeClassName = 'stacked-block-label-time',
   titleStyle,
   timeStyle,
-  titleRef: titleRefProp,
   blockSelector = '.calendar-time-block, .day-time-block',
 }) {
   const rootRef = useRef(null);
   const localTitleRef = useRef(null);
   const probeRef = useRef(null);
+  const timeElRef = useRef(null);
   const [showTime, setShowTime] = useState(Boolean(timeText));
-
-  const setTitleRef = (el) => {
-    localTitleRef.current = el;
-    if (typeof titleRefProp === 'function') titleRefProp(el);
-    else if (titleRefProp) titleRefProp.current = el;
-  };
+  const [titleMaxWidth, setTitleMaxWidth] = useState(null);
+  const [timeMaxWidth, setTimeMaxWidth] = useState(null);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return undefined;
 
+    const applyGutters = () => {
+      const weekBlock = findWeekBlock(root);
+      const titleEl = localTitleRef.current;
+      const timeEl = timeElRef.current;
+      const nextTitle = weekBlock && titleEl ? availableTextWidth(titleEl, weekBlock) : null;
+      const nextTime = weekBlock && timeEl ? availableTextWidth(timeEl, weekBlock) : null;
+      setTitleMaxWidth((prev) => (prev === nextTitle ? prev : nextTitle));
+      setTimeMaxWidth((prev) => (prev === nextTime ? prev : nextTime));
+    };
+
     if (!timeText) {
       setShowTime(false);
-      return undefined;
+      applyGutters();
     }
 
     const measure = () => {
+      applyGutters();
+      if (!timeText) return;
+
       const block = root.closest(blockSelector);
       const titleEl = localTitleRef.current;
       const probe = probeRef.current;
@@ -51,7 +61,12 @@ export default function StackedBlockLabel({
       setShowTime(room + 0.5 >= timeHeight);
     };
 
+    const onHoverChange = () => {
+      requestAnimationFrame(measure);
+    };
+
     measure();
+    const weekBlock = findWeekBlock(root);
     const ro = typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(() => measure())
       : null;
@@ -61,12 +76,21 @@ export default function StackedBlockLabel({
       if (block) ro.observe(block);
       if (localTitleRef.current) ro.observe(localTitleRef.current);
     }
+    weekBlock?.addEventListener('mouseenter', onHoverChange);
+    weekBlock?.addEventListener('mouseleave', onHoverChange);
+    const mo = weekBlock && typeof MutationObserver !== 'undefined'
+      ? new MutationObserver(() => measure())
+      : null;
+    mo?.observe(weekBlock, { subtree: true, attributes: true, attributeFilter: ['class'] });
     window.addEventListener('resize', measure);
     return () => {
       ro?.disconnect();
+      mo?.disconnect();
+      weekBlock?.removeEventListener('mouseenter', onHoverChange);
+      weekBlock?.removeEventListener('mouseleave', onHoverChange);
       window.removeEventListener('resize', measure);
     };
-  }, [title, timeText, blockSelector]);
+  }, [title, timeText, blockSelector, showTime]);
 
   const tip = timeText ? `${title} · ${timeText}` : title;
 
@@ -90,7 +114,7 @@ export default function StackedBlockLabel({
       }}
     >
       <div
-        ref={setTitleRef}
+        ref={localTitleRef}
         className={titleClassName}
         style={{
           fontSize: 13,
@@ -103,6 +127,7 @@ export default function StackedBlockLabel({
           maxWidth: '100%',
           wordBreak: 'break-word',
           ...titleStyle,
+          ...(titleMaxWidth != null ? { maxWidth: `${titleMaxWidth}px` } : {}),
         }}
       >
         {title}
@@ -127,6 +152,7 @@ export default function StackedBlockLabel({
           </div>
           {showTime ? (
             <div
+              ref={timeElRef}
               className={timeClassName}
               style={{
                 fontSize: 11,
@@ -134,7 +160,11 @@ export default function StackedBlockLabel({
                 opacity: 0.9,
                 marginTop: 2,
                 whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '100%',
                 ...timeStyle,
+                ...(timeMaxWidth != null ? { maxWidth: `${timeMaxWidth}px` } : {}),
               }}
             >
               {timeText}

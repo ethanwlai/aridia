@@ -5,6 +5,7 @@ import TaskCreationCard from './TaskCreationCard';
 import TaskActionsDropdown from './TaskActionsDropdown';
 import ShortBlockLabel from './ShortBlockLabel';
 import StackedBlockLabel from './StackedBlockLabel';
+import NowMarker from './NowMarker';
 import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK, getItemColor, snapMinutes, getItemDurationMinutes, formatMinutes, toggleCalendarHighlight, getCalendarHighlightOpacity } from '../utils/calendarItems';
 
 // Global drag state to bypass getData() limitations
@@ -50,38 +51,6 @@ function snapTotalMinutes(hour, minute) {
     hour: Math.floor(clamped / 60),
     minute: clamped % 60,
   };
-}
-
-// Dynamic text width calculation function
-function calculateOptimalTextWidth(textElement, textContent, blockHeight) {
-  if (!textElement || !textElement.parentElement) {
-    return { defaultWidth: '100%', hoverWidth: '85%', shouldTruncate: false };
-  }
-
-  const isLongBlock = blockHeight >= SHORT_BLOCK.weekInlineBelow;
-  
-  // For long blocks: allow text wrapping, for short blocks: truncate
-  if (isLongBlock) {
-    // Long blocks: 100% default, 85% hover, allow wrapping
-    return {
-      defaultWidth: '100%',
-      hoverWidth: '85%',
-      shouldTruncate: false,
-      allowWrapping: true,
-      textLength: textContent.length,
-      reason: 'long_block_allow_wrapping'
-    };
-  } else {
-    // Short blocks: 100% default, 55% hover, truncate with ellipsis
-    return {
-      defaultWidth: '100%',
-      hoverWidth: '55%',
-      shouldTruncate: false,
-      allowWrapping: false,
-      textLength: textContent.length,
-      reason: 'short_block_truncate'
-    };
-  }
 }
 
 function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, onUpdateStatus, onUpdateTask, centerDay, setCenterDay, highlightedItem, onHighlightItem, isNavigating = false, searchResults = null, onAutoSchedule, onQuickMove, onExtendDuration, clearActiveBlockTrigger, isQuickMoving, onEdit }) {
@@ -1807,17 +1776,12 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                        if (editBtn) editBtn.style.opacity = '1';
                        if (dropdownTrigger) dropdownTrigger.style.opacity = '1';
                      }
-                     // Show buttons and contract text on hover for short blocks
+                     // Show buttons on hover for short blocks
                      if (blockHeight < 48) {
                        const buttonContainer = e.currentTarget.querySelector('.task-action-buttons-inline');
-                       const textElement = e.currentTarget.querySelector('.task-text-element');
                        if (buttonContainer) {
                          // Buttons are now absolutely positioned, so we just need to make them visible
                          buttonContainer.style.opacity = '1';
-                       }
-                       if (textElement) {
-                         // Contract text to make room for buttons (Edit + Complete + Delete + TaskActionsDropdown)
-                         textElement.style.maxWidth = '40%';
                        }
                      }
                      // Show buttons on hover for long blocks
@@ -1854,10 +1818,9 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                        if (editBtn && !editBtn.classList.contains('selected')) editBtn.style.opacity = '0';
                        if (dropdownTrigger && !dropdownTrigger.closest('.task-actions-dropdown')) dropdownTrigger.style.opacity = '0';
                      }
-                     // Hide buttons and expand text on mouse leave for short blocks
+                     // Hide buttons on mouse leave for short blocks
                      if (blockHeight < 48) {
                        const buttonContainer = e.currentTarget.querySelector('.task-action-buttons-inline');
-                       const textElement = e.currentTarget.querySelector('.task-text-element');
                        
                        // Check if any buttons are selected
                        const hasSelectedButtons = buttonContainer && (
@@ -1867,15 +1830,6 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                        if (buttonContainer && !hasSelectedButtons) {
                          // Only hide container if no buttons are selected
                          buttonContainer.style.opacity = '0';
-                       }
-                       if (textElement) {
-                         // Only expand text if no buttons are selected
-                         if (!hasSelectedButtons) {
-                           textElement.style.maxWidth = '100%';
-                         } else {
-                           // Keep text truncated to avoid overlap with selected button
-                           textElement.style.maxWidth = '40%';
-                         }
                        }
                      }
                      // Hide buttons on mouse leave for long blocks (only non-selected ones)
@@ -2187,7 +2141,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                                 titleClassName="task-text-element"
                                 title={block.tasks[0].name || block.tasks[0].title}
                                 timeText={formatShortTimeRange(block.tasks[0].startTime, block.tasks[0].endTime)}
-                                actionGutter={SHORT_BLOCK.weekActionGutter}
+                                actionGutter={0}
                               />
                             ) : (
                             <StackedBlockLabel
@@ -2197,20 +2151,11 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                                   ? `${block.tasks[0].startTime} - ${block.tasks[0].endTime}`
                                   : ''
                               }
-                              titleRef={(el) => {
-                              if (el) {
-                                // Use requestAnimationFrame to ensure DOM is ready
-                                requestAnimationFrame(() => {
-                                  if (el && el.parentElement) {
-                                    const dynamicResult = calculateOptimalTextWidth(el, block.tasks[0].name, blockHeight);
-                                    el.style.maxWidth = dynamicResult.defaultWidth;
-                                    
-                                    // Debug logging
-                                    
-                                  }
-                                });
-                              }
-                            }}
+                              titleStyle={{
+                                whiteSpace: 'nowrap',
+                                textOverflow: 'ellipsis',
+                                wordBreak: 'normal',
+                              }}
                             />
                             )}
                             {isShort && (
@@ -2401,7 +2346,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                               titleClassName="task-text-element"
                               title={block.name || block.title}
                               timeText={formatShortTimeRange(block.startTime, block.endTime)}
-                              actionGutter={SHORT_BLOCK.weekActionGutter}
+                              actionGutter={0}
                             />
                           ) : (
                           <StackedBlockLabel
@@ -2411,20 +2356,11 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                                 ? `${block.startTime} - ${block.endTime}`
                                 : ''
                             }
-                            titleRef={(el) => {
-                            if (el) {
-                              // Use requestAnimationFrame to ensure DOM is ready
-                              requestAnimationFrame(() => {
-                                if (el && el.parentElement) {
-                                  const dynamicResult = calculateOptimalTextWidth(el, block.name, blockHeight);
-                                  el.style.maxWidth = dynamicResult.defaultWidth;
-                                  
-                                  // Debug logging
-
-                                }
-                              });
-                            }
-                          }}
+                            titleStyle={{
+                              whiteSpace: 'nowrap',
+                              textOverflow: 'ellipsis',
+                              wordBreak: 'normal',
+                            }}
                           />
                           )}
                         {isShort && (
@@ -2833,36 +2769,6 @@ function CurrentTimeIndicator({ getCurrentTimePosition, rowHeight, todayColIndex
     }
   }, [todayColIndex, colStart, colEnd, visibleCols]);
 
-  // Check if the current time overlaps a task block (for transparency)
-  const [isOverlapping, setIsOverlapping] = useState(false);
-  useEffect(() => {
-    // Find all calendar-time-blocks in the current column
-    if (todayColIndex === -1) return;
-    
-    // Check if today's column is actually visible
-    const isTodayVisible = todayColIndex >= colStart && todayColIndex < colEnd;
-    if (!isTodayVisible) return;
-    
-    const grid = document.querySelector('.calendar-grid');
-    if (!grid) return;
-    const blocks = Array.from(grid.querySelectorAll('.calendar-time-block'));
-    const now = new Date();
-    let overlap = false;
-    blocks.forEach(block => {
-      const style = window.getComputedStyle(block);
-      const blockTop = parseFloat(style.top);
-      const blockHeight = parseFloat(style.height);
-      const blockLeft = parseFloat(style.left);
-      const blockWidth = parseFloat(style.width);
-      // Only check blocks in the current column (with some tolerance for floating point precision)
-      if (Math.abs(blockLeft - left) > 1) return;
-      if (pos >= blockTop && pos <= blockTop + blockHeight) {
-        overlap = true;
-      }
-    });
-    setIsOverlapping(overlap);
-  }, [pos, left, colWidth, todayColIndex, colStart, colEnd]);
-
   if (todayColIndex === -1) return null;
 
   // Check if today's column is actually visible
@@ -2883,9 +2789,7 @@ function CurrentTimeIndicator({ getCurrentTimePosition, rowHeight, todayColIndex
         display: colWidth > 0 ? 'block' : 'none',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', position: 'relative', zIndex: 2 }}>
-        <div className="current-time-line" style={{ flex: 1, opacity: isOverlapping ? 0.7 : 1 }} />
-      </div>
+      <NowMarker />
     </div>
   );
 }

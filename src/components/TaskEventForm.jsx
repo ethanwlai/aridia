@@ -418,6 +418,7 @@ const TaskEventForm = ({ addTask, addEvent }) => {
       {/* Event/Task Toggle */}
       <div style={{
         display: 'flex',
+        flexShrink: 0,
         background: '#2e0066',
         borderRadius: '999px',
         padding: '0.1rem',
@@ -473,6 +474,7 @@ const TaskEventForm = ({ addTask, addEvent }) => {
             required
             style={{
               width: '100%',
+              minWidth: 0,
               padding: '0.875rem',
               borderRadius: '8px',
               border: '1px solid #a084e8',
@@ -480,7 +482,10 @@ const TaskEventForm = ({ addTask, addEvent }) => {
               color: 'white',
               fontSize: '0.9rem',
               outline: 'none',
-              transition: 'border-color 0.2s ease'
+              transition: 'border-color 0.2s ease',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
             }}
           />
         </div>
@@ -494,6 +499,9 @@ const TaskEventForm = ({ addTask, addEvent }) => {
             onChange={(e) => setDescription(e.target.value)}
             style={{
               width: '100%',
+              maxWidth: '100%',
+              minWidth: 0,
+              boxSizing: 'border-box',
               padding: '0.875rem',
               borderRadius: '8px',
               border: '1px solid #a084e8',
@@ -501,7 +509,8 @@ const TaskEventForm = ({ addTask, addEvent }) => {
               color: 'white',
               fontSize: '0.9rem',
               outline: 'none',
-              transition: 'border-color 0.2s ease'
+              transition: 'border-color 0.2s ease',
+              overflow: 'hidden'
             }}
           />
         </div>
