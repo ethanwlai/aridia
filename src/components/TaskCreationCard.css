@@ -74,8 +74,12 @@
   align-items: flex-start;
 }
 
+.task-title-row {
+  min-width: 0;
+}
+
 .task-title-input {
-  font-size: 1.35rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #a084e8;
   border: none;
@@ -83,6 +87,12 @@
   background: transparent;
   margin-bottom: 0.2rem;
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding-right: 11.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-desc-input {
@@ -93,6 +103,22 @@
   background: transparent;
   margin-bottom: 1.1rem;
   width: 100%;
+}
+
+.task-desc-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.task-desc-wrap input {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .pill-row {

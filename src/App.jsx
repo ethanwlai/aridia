@@ -14,7 +14,7 @@ import TaskCreationCard from './components/TaskCreationCard';
 import CalendarConflictModal from './components/CalendarConflictModal';
 import './components/CalendarConflictModal.css';
 import { useAuth } from './context/AuthContext';
-import { sortTasks } from './utils/taskSorter';
+import { sortEventsByDeadline, sortTasks } from './utils/taskSorter';
 import { startOfDay } from './utils/calendarItems';
 import {
   PENDING_AUTH_KEY,
@@ -67,6 +67,23 @@ function isItemSelectionTarget(target) {
   if (!(target instanceof Element)) return false;
   if (target.closest(ITEM_ACTION_SELECTOR)) return false;
   return Boolean(target.closest(ITEM_SELECTION_SELECTOR));
+}
+
+function matchesDashboardFilter(item, filter) {
+  const isTask = item.type === 'task';
+  const isDone = item.status === 'completed';
+  switch (filter) {
+    case 'tasks':
+      return isTask;
+    case 'events':
+      return item.type === 'event';
+    case 'incomplete':
+      return isTask && !isDone;
+    case 'completed':
+      return isTask && isDone;
+    default:
+      return isTask;
+  }
 }
 
 const App = () => {
@@ -773,7 +790,12 @@ const App = () => {
   }, [highlightedItem, tasks, smoothNavigateTo]);
   
 
-  const sortedTasks = sortTasks(tasks, motivation);
+  const dashboardItems = tasks.filter((item) =>
+    matchesDashboardFilter(item, selectedDashboardButton)
+  );
+  const sortedTasks = selectedDashboardButton === 'events'
+    ? sortEventsByDeadline(dashboardItems)
+    : sortTasks(dashboardItems, motivation);
 
   // Drag state for dashboard handle
   const dragHandleRef = useRef(null);
@@ -1003,7 +1025,7 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                       fontWeight: 700, 
                       color: 'white'
                     }}>
-                      {tasks.filter(task => task.type === 'task' && task.status === 'active').length}
+                      {tasks.filter((item) => matchesDashboardFilter(item, 'tasks')).length}
                     </span>
                     <span style={{ 
                       fontSize: '0.9rem', 
@@ -1041,7 +1063,7 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                       fontWeight: 700, 
                       color: 'white'
                     }}>
-                      {tasks.filter(task => task.type === 'event' && task.status === 'active').length}
+                      {tasks.filter((item) => matchesDashboardFilter(item, 'events')).length}
                     </span>
                     <span style={{ 
                       fontSize: '0.9rem', 
@@ -1079,7 +1101,7 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                       fontWeight: 700, 
                       color: 'white'
                     }}>
-                      {tasks.filter(task => task.status === 'incompleted').length}
+                      {tasks.filter((item) => matchesDashboardFilter(item, 'incomplete')).length}
                     </span>
                     <span style={{ 
                       fontSize: '0.9rem', 
@@ -1117,7 +1139,7 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                       fontWeight: 700, 
                       color: 'white'
                     }}>
-                      {tasks.filter(task => task.status === 'completed').length}
+                      {tasks.filter((item) => matchesDashboardFilter(item, 'completed')).length}
                     </span>
                     <span style={{ 
                       fontSize: '0.9rem', 
@@ -1142,7 +1164,9 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                     overflow: 'hidden'
                   }}
                 >
-                  <MotivationSlider motivation={motivation} setMotivation={setMotivation} />
+                  {(selectedDashboardButton == null || selectedDashboardButton === 'tasks') && (
+                    <MotivationSlider motivation={motivation} setMotivation={setMotivation} />
+                  )}
                   <TaskList 
                     tasks={sortedTasks} 
                     onDelete={deleteTask} 

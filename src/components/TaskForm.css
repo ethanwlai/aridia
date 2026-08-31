@@ -86,6 +86,14 @@ select {
   gap: 0.5rem;
 }
 
+.taskform--day .taskform-day-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
 .taskform--day .taskform-day-row {
   display: flex;
   flex-direction: column;
@@ -101,6 +109,12 @@ select {
   width: 100%;
   min-width: 0;
   max-width: 100%;
+}
+
+.taskform--day .taskform-day-field-desc {
+  overflow: hidden;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .taskform--day .taskform-day-times {

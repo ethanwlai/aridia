@@ -2240,6 +2240,7 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
           top: '2rem',
           right: '1rem',
           display: 'flex',
+          flexShrink: 0,
           background: '#2e0066',
           borderRadius: '999px',
           padding: '0.1rem',
@@ -2285,7 +2286,7 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
             Task
           </button>
         </div>
-        <div className="task-title-row" style={{display: 'flex', alignItems: 'center', width: '100%', marginBottom: '0.2rem', position: 'relative', overflow: 'visible'}}>
+        <div className="task-title-row" style={{display: 'flex', alignItems: 'center', width: '100%', minWidth: 0, marginBottom: '0.2rem', position: 'relative', overflow: 'visible'}}>
           <div
             className="tasktype-badge tasktype-pill-dropdown"
             style={{
@@ -2352,14 +2353,14 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
             onChange={e => setName(e.target.value)}
             autoFocus={false}
             style={{
-              fontSize: '1.2rem',
+              fontSize: '1rem',
               fontFamily: "'Karla', sans-serif"
             }}
           />
         </div>
         
         {/* Description Input - moved below task name */}
-        <div style={{ marginBottom: '0.5rem' }}>
+        <div className="task-desc-wrap" style={{ marginBottom: '0.5rem' }}>
           <input
             type="text"
             placeholder="Description"
@@ -2368,6 +2369,9 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
             autoFocus={false}
             style={{
               width: '100%',
+              maxWidth: '100%',
+              minWidth: 0,
+              boxSizing: 'border-box',
               padding: '0.5rem 0',
               borderRadius: '0',
               border: 'none',
@@ -2378,7 +2382,8 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
               transition: 'border-color 0.2s ease',
               fontFamily: 'inherit',
               marginLeft: '0',
-              marginRight: '0'
+              marginRight: '0',
+              overflow: 'hidden'
             }}
           />
         </div>

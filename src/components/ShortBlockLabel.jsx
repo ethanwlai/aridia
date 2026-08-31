@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { SHORT_BLOCK } from '../utils/calendarItems';
+import { availableTextWidth, findWeekBlock } from '../utils/blockTextGutter';
 
 function readFont(el) {
   if (!el) return '700 13px Karla, sans-serif';
@@ -31,12 +32,17 @@ export default function ShortBlockLabel({
   const rootRef = useRef(null);
   const titleRef = useRef(null);
   const [showTime, setShowTime] = useState(Boolean(timeText));
+  const [hoverMaxWidth, setHoverMaxWidth] = useState(null);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return undefined;
 
     const measure = () => {
+      const weekBlock = actionGutter <= 0 ? findWeekBlock(root) : null;
+      const cap = weekBlock ? availableTextWidth(root, weekBlock) : null;
+      setHoverMaxWidth((prev) => (prev === cap ? prev : cap));
+
       if (!timeText) {
         setShowTime(false);
         return;
@@ -44,7 +50,9 @@ export default function ShortBlockLabel({
 
       const parent = root.parentElement;
       const parentWidth = parent?.clientWidth ?? root.clientWidth;
-      const available = Math.max(0, parentWidth - actionGutter);
+      const available = actionGutter > 0
+        ? Math.max(0, parentWidth - actionGutter)
+        : Math.max(0, cap ?? parentWidth);
 
       const titleFont = readFont(titleRef.current);
       // Time uses slightly smaller type (matches rendered time span)
@@ -60,22 +68,40 @@ export default function ShortBlockLabel({
       setShowTime(fits);
     };
 
+    const onHoverChange = () => {
+      requestAnimationFrame(measure);
+    };
+
     measure();
+    const weekBlock = actionGutter <= 0 ? findWeekBlock(root) : null;
     const ro = typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(() => measure())
       : null;
     if (ro) {
       ro.observe(root);
       if (root.parentElement) ro.observe(root.parentElement);
+      if (weekBlock) ro.observe(weekBlock);
     }
+    weekBlock?.addEventListener('mouseenter', onHoverChange);
+    weekBlock?.addEventListener('mouseleave', onHoverChange);
+    const mo = weekBlock && typeof MutationObserver !== 'undefined'
+      ? new MutationObserver(() => measure())
+      : null;
+    mo?.observe(weekBlock, { subtree: true, attributes: true, attributeFilter: ['class'] });
     window.addEventListener('resize', measure);
     return () => {
       ro?.disconnect();
+      mo?.disconnect();
+      weekBlock?.removeEventListener('mouseenter', onHoverChange);
+      weekBlock?.removeEventListener('mouseleave', onHoverChange);
       window.removeEventListener('resize', measure);
     };
   }, [title, timeText, actionGutter]);
 
   const tip = timeText ? `${title} · ${timeText}` : title;
+  const maxWidth = actionGutter > 0
+    ? `calc(100% - ${actionGutter}px)`
+    : (hoverMaxWidth != null ? `${hoverMaxWidth}px` : '100%');
 
   return (
     <div
@@ -89,7 +115,7 @@ export default function ShortBlockLabel({
         justifyContent: 'flex-start',
         gap: SHORT_BLOCK.inlineGap,
         minWidth: 0,
-        maxWidth: `calc(100% - ${actionGutter}px)`,
+        maxWidth,
         width: 'fit-content',
         overflow: 'hidden',
       }}

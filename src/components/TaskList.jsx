@@ -24,11 +24,7 @@ function parseLocalDate(dateStr) {
 }
 
 const TaskList = ({ tasks, onDelete, onEdit, onUpdateStatus, onAutoSchedule, onQuickMove, onExtendDuration }) => {
-  // Filter to show only tasks (not events)
-  const filteredTasks = tasks ? tasks.filter(task => {
-    // Only show items with type === 'task'
-    return task.type === 'task';
-  }) : [];
+  const filteredTasks = tasks || [];
   
   const getPriorityColor = (level) => {
     switch (level) {
@@ -257,6 +253,8 @@ const TaskList = ({ tasks, onDelete, onEdit, onUpdateStatus, onAutoSchedule, onQ
                          justifyContent: 'flex-end',
                          cursor: 'default'
                        }}>
+                         {task.type === 'task' && (
+                         <>
                          {/* Energy Level */}
                          <span 
                            title={getEnergyText(task.energy)}
@@ -302,6 +300,8 @@ const TaskList = ({ tasks, onDelete, onEdit, onUpdateStatus, onAutoSchedule, onQ
                          >
                            ★
                          </span>
+                         </>
+                         )}
 
                                                   {/* Time Frame */}
                          <span style={{
