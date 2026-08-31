@@ -1,0 +1,47 @@
+.create-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2400;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 12px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  background: rgba(20, 0, 40, 0.45);
+  box-sizing: border-box;
+}
+
+.create-sheet {
+  width: min(430px, calc(100vw - 24px));
+  max-height: min(90dvh, 100%);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  background: transparent;
+  border-radius: 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+}
+
+.create-sheet .task-creation-card,
+.create-sheet .taskform--day {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.create-sheet .taskform--day {
+  background: #fff;
+  border-radius: 18px;
+  padding: 1.25rem 1.25rem 1rem;
+  min-height: 0;
+  overflow: auto;
+}
+
+body.create-sheet-open {
+  overflow: hidden;
+}
+
+@media (min-width: 720px) {
+  .create-sheet-overlay {
+    align-items: center;
+  }
+}

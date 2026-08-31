@@ -82,6 +82,9 @@ export default function DayTimeline({
   createSession = null,
   onCreateAt,
   onCancelCreate,
+  tapToCreate = false,
+  longPressMove = false,
+  focusNowToken = 0,
 }) {
   const scrollRef = useRef(null);
   const dayColumnRef = useRef(null);
@@ -91,6 +94,7 @@ export default function DayTimeline({
   const [createDrag, setCreateDrag] = useState(null);
   const [colWidth, setColWidth] = useState(0);
   const userHasScrolled = useRef(false);
+  const ignoreScrollRef = useRef(false);
   const justDraggedRef = useRef(false);
   const dragStateRef = useRef(null);
   dragStateRef.current = dragState;
@@ -158,6 +162,20 @@ export default function DayTimeline({
     const target = isToday ? getCurrentTimePosition() : 8 * ROW_HEIGHT;
     scrollRef.current.scrollTop = Math.max(0, target - 120);
   }, [dayStart, isToday, getCurrentTimePosition, highlightedItem]);
+
+  useLayoutEffect(() => {
+    if (!focusNowToken || !scrollRef.current) return;
+    userHasScrolled.current = false;
+    ignoreScrollRef.current = true;
+    const target = isToday ? getCurrentTimePosition() : 8 * ROW_HEIGHT;
+    scrollRef.current.scrollTop = Math.max(0, target - 120);
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        ignoreScrollRef.current = false;
+      });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [focusNowToken, isToday, getCurrentTimePosition]);
 
   useEffect(() => {
     if (!highlightedItem || !scrollRef.current) return;
@@ -251,6 +269,45 @@ export default function DayTimeline({
       return;
     }
 
+    if (longPressMove && e.pointerType && e.pointerType !== 'mouse') {
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const target = e.currentTarget;
+      let started = false;
+      const timer = window.setTimeout(() => {
+        started = true;
+        handleBlockMouseDown({
+          ...e,
+          pointerType: 'mouse',
+          button: 0,
+          currentTarget: target,
+          clientX: startX,
+          clientY: startY,
+          target: e.target,
+          preventDefault() {},
+          stopPropagation() {},
+        }, item);
+      }, 400);
+      const cancel = (moveEvent) => {
+        if (moveEvent.type === 'pointermove' && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 8) {
+          return;
+        }
+        window.clearTimeout(timer);
+        window.removeEventListener('pointermove', cancel);
+        window.removeEventListener('pointerup', cancel);
+        window.removeEventListener('pointercancel', cancel);
+      };
+      window.addEventListener('pointermove', cancel);
+      window.addEventListener('pointerup', cancel);
+      window.addEventListener('pointercancel', cancel);
+      e.preventDefault();
+      e.stopPropagation();
+      closeCreate();
+      setActiveId(item.id);
+      toggleCalendarHighlight(highlightedItem, onHighlightItem, item);
+      return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
     abortAllDrags();
@@ -325,6 +382,7 @@ export default function DayTimeline({
   };
 
   const handleColumnMouseDown = (e) => {
+    if (tapToCreate) return;
     if (e.button !== 0) return;
     if (e.target.closest('.day-time-block') || e.target.closest('.day-agenda')) return;
 
@@ -489,7 +547,10 @@ export default function DayTimeline({
       <div
         className="day-timeline-scroll"
         ref={scrollRef}
-        onScroll={() => { userHasScrolled.current = true; }}
+        onScroll={() => {
+          if (ignoreScrollRef.current) return;
+          userHasScrolled.current = true;
+        }}
       >
         <div className="day-timeline-grid" style={{ height: 24 * ROW_HEIGHT }}>
           <div className="day-timeline-hours" style={{ width: TIME_COL_WIDTH }}>
@@ -532,7 +593,7 @@ export default function DayTimeline({
                 <div
                   key={item.id}
                   data-day-block-id={item.id}
-                  className={`day-time-block${completed ? ' is-completed' : ''}${isDragging ? ' is-dragging' : ''}${height < SHORT_BLOCK.dayInlineBelow ? ' is-short' : ''}`}
+                  className={`day-time-block${completed ? ' is-completed' : ''}${isDragging ? ' is-dragging' : ''}${height < SHORT_BLOCK.dayInlineBelow ? ' is-short' : ''}${activeId === item.id ? ' is-selected' : ''}`}
                   style={{
                     top,
                     left,
@@ -541,7 +602,7 @@ export default function DayTimeline({
                     background: color,
                     opacity: isDragging ? 0.85 : highlightOpacity,
                   }}
-                  onMouseDown={(e) => handleBlockMouseDown(e, item)}
+                  onPointerDown={(e) => handleBlockMouseDown(e, item)}
                   onClick={(e) => e.stopPropagation()}
                   onMouseEnter={(e) => {
                     e.currentTarget.querySelectorAll('.day-block-action, .task-actions-dropdown-trigger').forEach((el) => {
@@ -717,7 +778,11 @@ export default function DayTimeline({
           </div>
         </div>
       </div>
-      <p className="day-timeline-hint">Click or drag an empty slot to create · Drag a block to schedule</p>
+      <p className="day-timeline-hint">
+        {tapToCreate
+          ? 'Tap an empty slot to create · Long-press a block to move'
+          : 'Click or drag an empty slot to create · Drag a block to schedule'}
+      </p>
     </div>
   );
 }

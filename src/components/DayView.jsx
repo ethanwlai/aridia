@@ -8,6 +8,9 @@ import {
   formatDateKey,
   startOfDay,
 } from '../utils/calendarItems';
+import CreateSheet from './CreateSheet';
+import TaskForm from './TaskForm';
+import { useLayoutMode } from '../hooks/useLayoutMode';
 import './DayView.css';
 
 const DRAG_THRESHOLD = 6;
@@ -47,7 +50,9 @@ const DayView = ({
   onExtendDuration,
   highlightedItem = null,
   onHighlightItem,
+  focusNowToken = 0,
 }) => {
+  const { isCompact, isCoarse } = useLayoutMode();
   const selectedDate = startOfDay(centerDay || new Date());
   const dateKey = formatDateKey(selectedDate);
 
@@ -239,9 +244,12 @@ const DayView = ({
           onExtendDuration={onExtendDuration}
           externalDragItem={isAgendaDragging ? agendaDrag.item : null}
           onExternalDragEnd={handleExternalDragEnd}
-          createSession={createSession}
+          createSession={isCompact ? null : createSession}
           onCreateAt={handleCreateAt}
           onCancelCreate={closeCreate}
+          tapToCreate={isCompact || isCoarse}
+          longPressMove={isCompact || isCoarse}
+          focusNowToken={focusNowToken}
         />
         <DayAgenda
           day={selectedDate}
@@ -251,18 +259,31 @@ const DayView = ({
           onHighlightItem={onHighlightItem}
           draggingId={draggingId}
           isDragging={isAgendaDragging}
-          onAdd={createSession ? handleCreateAdd : onAdd}
+          onAdd={createSession && !isCompact ? handleCreateAdd : onAdd}
           onEdit={onEdit}
           onDelete={onDelete}
           onUpdateStatus={onUpdateStatus}
           onAutoSchedule={onAutoSchedule}
           onQuickMove={onQuickMove}
           onExtendDuration={onExtendDuration}
-          createSession={createSession}
+          createSession={isCompact ? null : createSession}
           onCancelCreate={closeCreate}
           onTimesChange={handleCreateTimesChange}
         />
       </div>
+      {isCompact && createSession && (
+        <CreateSheet open onClose={closeCreate}>
+          <TaskForm
+            variant="day"
+            addTask={handleCreateAdd}
+            defaultStartTime={createSession.start}
+            defaultEndTime={createSession.end}
+            defaultDeadline={selectedDate}
+            onTimesChange={handleCreateTimesChange}
+            onCancel={closeCreate}
+          />
+        </CreateSheet>
+      )}
     </div>
   );
 };
