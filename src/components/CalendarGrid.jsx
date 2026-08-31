@@ -6,7 +6,9 @@ import TaskActionsDropdown from './TaskActionsDropdown';
 import ShortBlockLabel from './ShortBlockLabel';
 import StackedBlockLabel from './StackedBlockLabel';
 import NowMarker from './NowMarker';
+import CreateSheet from './CreateSheet';
 import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK, getItemColor, snapMinutes, getItemDurationMinutes, formatMinutes, toggleCalendarHighlight, getCalendarHighlightOpacity } from '../utils/calendarItems';
+import { useLayoutMode } from '../hooks/useLayoutMode';
 
 // Global drag state to bypass getData() limitations
 window.globalDragState = window.globalDragState || { 
@@ -53,7 +55,10 @@ function snapTotalMinutes(hour, minute) {
   };
 }
 
-function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, onUpdateStatus, onUpdateTask, centerDay, setCenterDay, highlightedItem, onHighlightItem, isNavigating = false, searchResults = null, onAutoSchedule, onQuickMove, onExtendDuration, clearActiveBlockTrigger, isQuickMoving, onEdit }) {
+function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, onUpdateStatus, onUpdateTask, centerDay, setCenterDay, highlightedItem, onHighlightItem, isNavigating = false, searchResults = null, onAutoSchedule, onQuickMove, onExtendDuration, clearActiveBlockTrigger, isQuickMoving, onEdit, focusNowToken = 0 }) {
+  const { isCompact, isCoarse, isDrawerChrome } = useLayoutMode();
+  const condensedWeek = isCompact;
+  const tapToCreate = isCompact || isCoarse;
 
   // Responsive visible columns state
   const [visibleCols, setVisibleCols] = useState(7);
@@ -61,13 +66,17 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
 
   // Minimum column width (matches .calendar-cell min-width or actual width)
   const MIN_COL_WIDTH = 120; // px, adjust as needed for your design
-  const TIME_COL_WIDTH = 80; // px, matches .calendar-grid time column
+  const TIME_COL_WIDTH = condensedWeek ? 48 : 80;
 
   // Responsive logic: update visibleCols on grid resize
   useEffect(() => {
     if (!gridRef.current) return;
     function updateVisibleCols() {
       if (!gridRef.current) return;
+      if (condensedWeek) {
+        setVisibleCols(7);
+        return;
+      }
       const gridWidth = gridRef.current.offsetWidth;
       const availableWidth = gridWidth - TIME_COL_WIDTH;
       const cols = Math.max(1, Math.floor(availableWidth / MIN_COL_WIDTH));
@@ -79,7 +88,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     return () => {
       observer.disconnect();
     };
-  }, []);
+  }, [condensedWeek, TIME_COL_WIDTH]);
 
   // Generate rolling 7-day window with centerDay as the third column (index 2)
   const days = Array.from({ length: 7 }, (_, i) => addDays(centerDay, i - 2));
@@ -97,6 +106,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   // Ref to store the closeTimePicker method
   const closeTimePickerRef = useRef(null);
   const scrollWrapperRef = useRef();
+  const ignoreScrollRef = useRef(false);
   // State for debug red dot
   const [debugDot, setDebugDot] = useState(null);
   // Track if user has scrolled
@@ -253,23 +263,27 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   function handleGridSingleClick(e) {
     e.preventDefault();
     e.stopPropagation();
-    
-    // Don't clear active block if clicking on a time block
-    if (!e.target.closest('.calendar-time-block')) {
-      // Clear any active selections or highlights
-      setActiveBlockKey(null);
-    }
-    
-    // Close task creation card if it's open (regardless of what was clicked)
+
     if (cardPos) {
       setCardPos(null);
+      return;
+    }
+
+    if (tapToCreate && !e.target.closest('.calendar-time-block')) {
+      const cell = e.target.closest('.calendar-cell');
+      if (cell && !cell.classList.contains('time-column')) {
+        openCreateFromEvent(e);
+        return;
+      }
+    }
+
+    if (!e.target.closest('.calendar-time-block')) {
+      setActiveBlockKey(null);
     }
   }
 
   // On grid double click, show card at click position
-  function handleGridDoubleClick(e) {
-    e.preventDefault();
-    e.stopPropagation();
+  function openCreateFromEvent(e) {
     if (cardRef.current && cardRef.current.contains(e.target)) return;
     const cell = e.target.closest('.calendar-cell');
     if (!cell || cell.classList.contains('time-column')) return;
@@ -344,6 +358,13 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     if (document.activeElement) document.activeElement.blur();
   }
 
+  function handleGridDoubleClick(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (tapToCreate) return;
+    openCreateFromEvent(e);
+  }
+
   useEffect(() => {
     if (onAdd) {
       // Handle any additional side effects when onAdd changes
@@ -376,6 +397,25 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     }, 60000);
     return () => clearInterval(interval);
   }, [userHasScrolled]);
+
+  useLayoutEffect(() => {
+    if (!focusNowToken) return;
+    setUserHasScrolled(false);
+    ignoreScrollRef.current = true;
+    const apply = () => {
+      if (!scrollWrapperRef.current) return;
+      const pos = getCurrentTimePosition();
+      scrollWrapperRef.current.scrollTop = Math.max(0, pos - 120);
+    };
+    apply();
+    const id = requestAnimationFrame(() => {
+      apply();
+      requestAnimationFrame(() => {
+        ignoreScrollRef.current = false;
+      });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [focusNowToken]);
 
   // Navigation handlers with smooth transitions
   const handlePrevDay = () => {
@@ -474,6 +514,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   
   // Handler for user scroll
   const handleUserScroll = () => {
+    if (ignoreScrollRef.current) return;
     setUserHasScrolled(true);
     
     // Update drag preview position when scrolling
@@ -682,7 +723,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     // Optimized calculations with fewer operations
     const relativeY = e.clientY - rect.top;
     const relativeX = e.clientX - rect.left;
-    const timeColumnWidth = 80;
+    const timeColumnWidth = TIME_COL_WIDTH;
     const dayColumnWidth = (rect.width - timeColumnWidth) / (colEnd - colStart);
     
     const hour = Math.floor(relativeY / ROW_HEIGHT);
@@ -697,7 +738,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       minute: snapped.minute,
       colIdx: Math.max(colStart, Math.min(colEnd - 1, colIdx))
     };
-  }, [colStart, colEnd]);
+  }, [colStart, colEnd, TIME_COL_WIDTH]);
   
   // Step 2: Visual Preview - Calculate drag preview dimensions
   const calculateDragPreview = useCallback((position, taskData, clickOffsetY = 0) => {
@@ -711,7 +752,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     }
     
     const scrollRect = scrollWrapperRef.current.getBoundingClientRect();
-    const timeColumnWidth = 80;
+    const timeColumnWidth = TIME_COL_WIDTH;
     const availableWidth = scrollRect.width - timeColumnWidth;
     const dayColumnWidth = availableWidth / (colEnd - colStart);
     
@@ -770,7 +811,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     };
     
     return result;
-  }, [colStart, colEnd]);
+  }, [colStart, colEnd, TIME_COL_WIDTH]);
   
   // Optimized drag handlers with smoother updates
   const handleDragOver = useCallback((e) => {
@@ -1267,7 +1308,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
 
   return (
     <div
-      className={`calendar-grid ${isNavigating ? 'calendar-grid-transition' : ''}`}
+      className={`calendar-grid ${isNavigating ? 'calendar-grid-transition' : ''}${condensedWeek ? ' calendar-grid--condensed' : ''}`}
       ref={gridRef}
       style={{
         position: 'relative',
@@ -1307,7 +1348,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       {/* Fixed header row */}
       <div className={`header-row ${isNavigating ? 'header-row-transition' : ''}`} style={{ 
         display: 'grid', 
-        gridTemplateColumns: `80px repeat(${numDayCols}, 1fr)`,
+        gridTemplateColumns: `${TIME_COL_WIDTH}px repeat(${numDayCols}, 1fr)`,
         height: '60px',
         background: 'white',
         borderBottom: '1px solid #e0e0e0',
@@ -1321,7 +1362,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
           const isToday = realIdx === getTodayColumnIndex();
           return (
             <div key={realIdx} className={isToday ? "day-header current-day-header" : "day-header"}>
-              <div className={isToday ? "weekday-label" : "weekday-label"}>{format(date, 'EEE')}</div>
+              <div className={isToday ? "weekday-label" : "weekday-label"}>{format(date, condensedWeek ? 'EEEEE' : 'EEE')}</div>
               <div className={isToday ? "day-number" : "day-number"}>{format(date, 'd')}</div>
             </div>
           );
@@ -1363,7 +1404,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
           className={isNavigating ? 'calendar-grid-content-transition' : ''}
           style={{
             display: 'grid',
-            gridTemplateColumns: `80px repeat(${numDayCols}, 1fr)`,
+            gridTemplateColumns: `${TIME_COL_WIDTH}px repeat(${numDayCols}, 1fr)`,
             gridAutoRows: 'minmax(50px, auto)',
             position: 'relative',
           }}
@@ -1381,7 +1422,9 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                 }}
                 onMouseDown={e => e.preventDefault()}
               >
-                {format(new Date(0, 0, 0, hour), 'h aa')}
+                {condensedWeek
+                  ? (hour === 0 || hour === 12 ? '12' : String(hour % 12))
+                  : format(new Date(0, 0, 0, hour), 'h aa')}
               </div>
               {days.slice(colStart, colEnd).map((_, idx) => {
                 const realIdx = colStart + idx;
@@ -1410,6 +1453,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
           colEnd={colEnd}
           visibleCols={visibleCols}
           days={days}
+          timeColWidth={TIME_COL_WIDTH}
         />
 
 
@@ -1617,11 +1661,11 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
               const isShort = blockHeight < SHORT_BLOCK.weekInlineBelow;
               // Calculate left and width
               const grid = document.querySelector('.calendar-grid');
-              let colLeft = 80;
+              let colLeft = TIME_COL_WIDTH;
               let colWidth = 0;
               if (grid) {
                 const gridRect = grid.getBoundingClientRect();
-                const timeColumnWidth = 80;
+                const timeColumnWidth = TIME_COL_WIDTH;
                 colWidth = (gridRect.width - timeColumnWidth) / (colEnd - colStart);
                 colLeft = timeColumnWidth + (colIdx) * colWidth;
               } else {
@@ -1671,7 +1715,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
               return (
                 <div
                   key={blockKey}
-                  className={`calendar-time-block ${statusClass}${isShort ? ' short-block' : ''}`}
+                  className={`calendar-time-block ${statusClass}${isShort ? ' short-block' : ''}${isHighlighted ? ' is-selected' : ''}`}
                   style={{
                     position: 'absolute',
                     left,
@@ -1698,7 +1742,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                     userSelect: 'none',
                     caretColor: 'transparent',
                   }}
-                  onMouseDown={e => {
+                  onPointerDown={e => {
                     // Don't set active block if clicking on buttons / actions menu
                     if (
                       e.target.closest('.task-complete-btn') ||
@@ -1730,6 +1774,46 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                       onHighlightItem,
                       block._group ? block.tasks[0] : block
                     );
+
+                    if (condensedWeek || tapToCreate) {
+                      if (activeBlockKey === blockKey) {
+                        const editTask = block._group ? block.tasks[0] : block;
+                        if (onEdit) onEdit(editTask);
+                      } else {
+                        setActiveBlockKey(blockKey);
+                      }
+                      if (e.pointerType && e.pointerType !== 'mouse') {
+                        const startX = e.clientX;
+                        const startY = e.clientY;
+                        const taskData = {
+                          ...block,
+                          id: block._group ? block.tasks[0].id : block.id,
+                          title: block._group ? block.tasks[0].title : block.title,
+                          startTime: block._group ? block.tasks[0].startTime : block.startTime,
+                          endTime: block._group ? block.tasks[0].endTime : block.endTime,
+                          deadline: block._group ? block.tasks[0].deadline : block.deadline,
+                          taskType: block._group ? block.tasks[0].taskType : block.taskType,
+                          duration: block._group ? block.tasks[0].duration : block.duration,
+                          type: block._group ? block.tasks[0].type : block.type,
+                        };
+                        const timer = window.setTimeout(() => {
+                          startCustomDrag(e, taskData, false);
+                        }, 400);
+                        const cancel = (moveEvent) => {
+                          if (moveEvent.type === 'pointermove' && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 8) {
+                            return;
+                          }
+                          window.clearTimeout(timer);
+                          window.removeEventListener('pointermove', cancel);
+                          window.removeEventListener('pointerup', cancel);
+                          window.removeEventListener('pointercancel', cancel);
+                        };
+                        window.addEventListener('pointermove', cancel);
+                        window.addEventListener('pointerup', cancel);
+                        window.addEventListener('pointercancel', cancel);
+                      }
+                      return;
+                    }
                     
                     // Check if this block was already highlighted (second click)
                     if (activeBlockKey === blockKey) {
@@ -2624,7 +2708,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
           <div
             style={{
               position: 'absolute',
-              left: 80 + (dragState.position.colIdx - colStart) * ((gridRef.current?.offsetWidth || 800) - 80) / (colEnd - colStart),
+              left: TIME_COL_WIDTH + (dragState.position.colIdx - colStart) * ((gridRef.current?.offsetWidth || 800) - TIME_COL_WIDTH) / (colEnd - colStart),
               top: dragState.position.hour * 50 + (dragState.position.minute / 60) * 50,
               width: 4,
               height: 4,
@@ -2667,15 +2751,40 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       )}
 
       {/* Task creation card */}
+      {isDrawerChrome && cardPos ? (
+        <CreateSheet open onClose={() => setCardPos(null)}>
+          <TaskCreationCard
+            key={cardKey}
+            showPlusCircle={false}
+            onCancel={() => setCardPos(null)}
+            onAdd={(task) => {
+              if (task.startTime && task.endTime && task.startTime === task.endTime) return;
+              if (onAdd) onAdd(task);
+              setCardPos(null);
+            }}
+            flippedX={false}
+            flippedY={false}
+            onDatePickerClose={(closeMethod) => {
+              closeDatePickerRef.current = closeMethod;
+            }}
+            onTimePickerClose={(closeMethod) => {
+              closeTimePickerRef.current = closeMethod;
+            }}
+            defaultStartTime={cardPos?.defaultStartTime}
+            defaultEndTime={cardPos?.defaultEndTime}
+            defaultDeadline={cardPos?.defaultDeadline}
+          />
+        </CreateSheet>
+      ) : (
       <div
         ref={cardRef}
         style={{
           position: 'absolute',
           display: cardPos ? 'block' : 'none',
           left: cardPos ? (cardPos.flippedX ? cardPos.x - 430 : cardPos.x) : 0,
-          top: cardPos ? cardPos.y : 0, // Always position at the calculated Y, let CSS handle the flip
+          top: cardPos ? cardPos.y : 0,
           zIndex: 100,
-          transform: cardPos?.flippedY ? 'translateY(-240px)' : 'none', // Use transform for vertical flip
+          transform: cardPos?.flippedY ? 'translateY(-240px)' : 'none',
         }}
       >
 
@@ -2685,9 +2794,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
             setCardPos(null);
           }}
           onAdd={(task) => {
-            // Only block if start and end times are exactly the same
             if (task.startTime && task.endTime && task.startTime === task.endTime) {
-              // Invalid, do not add
               return;
             }
             if (onAdd) onAdd(task);
@@ -2706,11 +2813,12 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
           defaultDeadline={cardPos?.defaultDeadline}
         />
       </div>
+      )}
     </div>
   );
 }
 
-function CurrentTimeIndicator({ getCurrentTimePosition, rowHeight, todayColIndex, colStart, colEnd, visibleCols, days }) {
+function CurrentTimeIndicator({ getCurrentTimePosition, rowHeight, todayColIndex, colStart, colEnd, visibleCols, days, timeColWidth = 80 }) {
   const [pos, setPos] = useState(getCurrentTimePosition());
   const [left, setLeft] = useState(80); // default time column width
   const [colWidth, setColWidth] = useState(0);
@@ -2734,11 +2842,11 @@ function CurrentTimeIndicator({ getCurrentTimePosition, rowHeight, todayColIndex
     
     const updatePosition = () => {
       const grid = document.querySelector('.calendar-grid');
-      let newLeft = 80;
+      let newLeft = timeColWidth;
       let newColWidth = 0;
       if (grid) {
         const gridRect = grid.getBoundingClientRect();
-        const timeColumnWidth = 80;
+        const timeColumnWidth = timeColWidth;
         const numVisibleDayCols = colEnd - colStart;
         newColWidth = (gridRect.width - timeColumnWidth) / numVisibleDayCols;
         // Calculate position relative to visible columns
@@ -2767,7 +2875,7 @@ function CurrentTimeIndicator({ getCurrentTimePosition, rowHeight, todayColIndex
         observer.disconnect();
       };
     }
-  }, [todayColIndex, colStart, colEnd, visibleCols]);
+  }, [todayColIndex, colStart, colEnd, visibleCols, timeColWidth]);
 
   if (todayColIndex === -1) return null;
 

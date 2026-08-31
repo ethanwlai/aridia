@@ -13,6 +13,8 @@ import DayDetailPanel from './components/DayDetailPanel';
 import TaskCreationCard from './components/TaskCreationCard';
 import CalendarConflictModal from './components/CalendarConflictModal';
 import './components/CalendarConflictModal.css';
+import CreateSheet from './components/CreateSheet';
+import { useLayoutMode, getLayoutMode } from './hooks/useLayoutMode';
 import { useAuth } from './context/AuthContext';
 import { sortEventsByDeadline, sortTasks } from './utils/taskSorter';
 import { startOfDay } from './utils/calendarItems';
@@ -98,8 +100,10 @@ const App = () => {
   const [conflict, setConflict] = useState(null);
   const [conflictBusy, setConflictBusy] = useState(false);
   const tasksReady = !authLoading && hydratedUserId === userId;
+  const { isCompact, isDrawerChrome } = useLayoutMode();
   const [motivation, setMotivation] = useState(3);
-  const [viewMode, setViewMode] = useState('week');
+  const [viewMode, setViewMode] = useState(() => (getLayoutMode() === 'compact' ? 'day' : 'week'));
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [chevronHover, setChevronHover] = useState(false);
   const [selectedDashboardButton, setSelectedDashboardButton] = useState(null);
   const [chevronVisible, setChevronVisible] = useState(true);
@@ -120,6 +124,7 @@ const App = () => {
   // Trigger to clear activeBlockKey in CalendarGrid when Quick Move is used
   const [clearActiveBlockTrigger, setClearActiveBlockTrigger] = useState(0);
   const [isQuickMoving, setIsQuickMoving] = useState(false);
+  const [focusNowToken, setFocusNowToken] = useState(0);
 
   // Search state
   const [searchResults, setSearchResults] = useState(null);
@@ -505,6 +510,19 @@ const App = () => {
     setViewMode(mode);
   }, []);
 
+  useEffect(() => {
+    if (!isDrawerChrome) setDrawerOpen(false);
+  }, [isDrawerChrome]);
+
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setDrawerOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [drawerOpen]);
+
   const openDayView = useCallback((date) => {
     setPanelDate(null);
     setHighlightedItem(null);
@@ -755,6 +773,7 @@ const App = () => {
       setHighlightedItem(null);
     } else {
       setHighlightedItem(item);
+      if (isDrawerChrome) setDrawerOpen(false);
     }
   };
 
@@ -800,8 +819,29 @@ const App = () => {
   // Drag state for dashboard handle
   const dragHandleRef = useRef(null);
   const [dragProgress, setDragProgress] = useState(0); // 0 = closed, 1 = fully open
-  const sidebarBaseWidth = 360; // Matches sidebar width (320px) + padding (40px)
-const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
+  const sidebarBaseWidth = isDrawerChrome ? 0 : 360;
+  const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
+
+  useEffect(() => {
+    const hide = isDrawerChrome || dragProgress > 0;
+    document.documentElement.classList.toggle('hide-scrollbars', hide);
+    return () => document.documentElement.classList.remove('hide-scrollbars');
+  }, [isDrawerChrome, dragProgress]);
+
+  const prevDragProgressRef = useRef(dragProgress);
+  const prevDrawerOpenRef = useRef(drawerOpen);
+  useEffect(() => {
+    const prevProgress = prevDragProgressRef.current;
+    const prevDrawer = prevDrawerOpenRef.current;
+    const opened = prevProgress === 0 && dragProgress > 0;
+    const closed = prevProgress > 0 && dragProgress === 0;
+    const drawerToggled = prevDrawer !== drawerOpen;
+    prevDragProgressRef.current = dragProgress;
+    prevDrawerOpenRef.current = drawerOpen;
+    if (!opened && !closed && !drawerToggled) return;
+    setCenterDay(startOfDay(new Date()));
+    setFocusNowToken((n) => n + 1);
+  }, [dragProgress, drawerOpen]);
 
   // Calculate the available width for the main layout
   const [mainLayoutWidth, setMainLayoutWidth] = useState(window.innerWidth);
@@ -822,12 +862,14 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
   // Comfortable width for the last visible column when dashboard is fully expanded
   const COMFORTABLE_COL_WIDTH = 180; // Adjusted for better spacing with wider sidebar
   // Maximum dashboard width: main layout width - sidebar - time column - comfortable last column width
-  const dashboardMaxWidth = Math.max(0, mainLayoutWidth - sidebarBaseWidth - TIME_COL_WIDTH - COMFORTABLE_COL_WIDTH);
-  // Calculate dashboard width and visible columns
-  const dashboardWidth = dragProgress * dashboardMaxWidth;
+  const dashboardMaxWidth = isDrawerChrome
+    ? 0
+    : Math.max(0, mainLayoutWidth - 360 - TIME_COL_WIDTH - COMFORTABLE_COL_WIDTH);
+  const dashboardWidth = isDrawerChrome ? 0 : dragProgress * dashboardMaxWidth;
 
   // Drag event handlers (with snap)
   function handleDragStart(e) {
+    if (isDrawerChrome) return;
     document.body.style.userSelect = 'none';
     window.addEventListener('mousemove', handleDrag);
     window.addEventListener('mouseup', handleDragEnd, { once: true });
@@ -871,14 +913,31 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
             style={{ position: 'relative', display: 'flex', flexDirection: 'row', height: '100%', width: '100%', background: '#2e0066' }}
           >
             {/* Sidebar and dashboard area */}
-            <div style={{
+            {(isDrawerChrome ? drawerOpen : true) && (
+            <div
+              className={isDrawerChrome ? 'app-drawer-overlay' : undefined}
+              onClick={isDrawerChrome ? () => setDrawerOpen(false) : undefined}
+              style={isDrawerChrome ? undefined : {
               width: sidebarBaseWidth + dashboardWidth,
               height: '100%',
               display: 'flex',
               flexDirection: 'row',
               position: 'relative',
               background: '#2e0066',
-            }}>
+            }}
+            >
+              <div
+                className={isDrawerChrome ? 'app-drawer' : undefined}
+                onClick={isDrawerChrome ? (e) => e.stopPropagation() : undefined}
+                style={isDrawerChrome ? undefined : {
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'row',
+                  position: 'relative',
+                  background: '#2e0066',
+                }}
+              >
               <Sidebar 
           tasks={tasks} 
           onDelete={deleteTask} 
@@ -892,25 +951,26 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
           onHighlightItem={setHighlightedItem}
           onEdit={handleEditTask}
           searchResults={searchResults}
+          allowCalendarDrag={!isDrawerChrome}
         />
               {/* Dashboard panel with Aridia Classic */}
               <div
                 className="dashboard-panel"
                 style={{
-                  width: dashboardWidth,
+                  width: isDrawerChrome ? '100%' : dashboardWidth,
                   minWidth: 0,
-                  maxWidth: dashboardMaxWidth,
-                  height: '100%',
+                  maxWidth: isDrawerChrome ? 'none' : dashboardMaxWidth,
+                  height: isDrawerChrome ? undefined : '100%',
                   maxHeight: '100%',
                   background: '#2e0066',
                   color: 'white',
-                  transition: 'width 0.3s cubic-bezier(.4,0,.2,1)',
+                  transition: isDrawerChrome ? undefined : 'width 0.3s cubic-bezier(.4,0,.2,1)',
                   overflow: 'auto',
-                  display: 'flex',
+                  display: isDrawerChrome ? 'flex' : 'flex',
                   flexDirection: 'column',
-                  padding: dashboardWidth > 40 ? '2rem 1.5rem' : '0',
-                  opacity: dashboardWidth > 40 ? 1 : 0,
-                  pointerEvents: dashboardWidth > 40 ? 'auto' : 'none',
+                  padding: isDrawerChrome || dashboardWidth > 40 ? '2rem 1.5rem' : '0',
+                  opacity: isDrawerChrome || dashboardWidth > 40 ? 1 : 0,
+                  pointerEvents: isDrawerChrome || dashboardWidth > 40 ? 'auto' : 'none',
                   borderRight: 'none',
                   boxShadow: 'none',
                   borderRadius: '16px',
@@ -1180,6 +1240,8 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                 </div>
                 </div>
               </div>
+              {!isDrawerChrome && (
+              <>
               {/* Vertical drag line (full height, invisible but interactive) */}
               <div
                 ref={dragHandleRef}
@@ -1267,7 +1329,11 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                   </svg>
                 </div>
               )}
+              </>
+              )}
+              </div>
             </div>
+            )}
             {/* Calendar grid area, flush right and expanding left to the drag line */}
             <div className="calendar-wrapper" style={{ 
               flex: 1, 
@@ -1282,8 +1348,12 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                 tasks={tasks}
                 onSearch={setSearchResults}
                 sidebarWidth={sidebarBaseWidth + dashboardWidth}
-                dashboardFullyOpen={dragProgress === 1}
+                dashboardFullyOpen={!isDrawerChrome && dragProgress === 1}
                 onHighlightItem={setHighlightedItem}
+                compactChrome={isDrawerChrome}
+                isCompact={isCompact}
+                onOpenDrawer={() => setDrawerOpen((open) => !open)}
+                drawerOpen={drawerOpen}
               />
               {viewMode === 'week' && (
                 <CalendarGrid 
@@ -1304,6 +1374,7 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                   onEdit={handleEditTask}
                   clearActiveBlockTrigger={clearActiveBlockTrigger}
                   isQuickMoving={isQuickMoving}
+                  focusNowToken={focusNowToken}
                 />
               )}
               {viewMode === 'day' && (
@@ -1321,6 +1392,7 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                   onExtendDuration={handleExtendDuration}
                   highlightedItem={highlightedItem}
                   onHighlightItem={setHighlightedItem}
+                  focusNowToken={focusNowToken}
                 />
               )}
               {(viewMode === 'month' || viewMode === 'year') && (
@@ -1332,7 +1404,7 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                       tasks={tasks}
                       panelDate={panelDate}
                       onDayClick={setPanelDate}
-                      onDayDoubleClick={openDayView}
+                      onDayDoubleClick={isDrawerChrome ? undefined : openDayView}
                       onMonthTitleClick={openMonthView}
                     />
                   ) : (
@@ -1342,9 +1414,10 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                       tasks={tasks}
                       panelDate={panelDate}
                       onDayClick={setPanelDate}
-                      onDayDoubleClick={openDayView}
+                      onDayDoubleClick={isDrawerChrome ? undefined : openDayView}
                       highlightedItem={highlightedItem}
                       onHighlightItem={setHighlightedItem}
+                      compact={isCompact}
                     />
                   )}
                   {panelDate && (
@@ -1354,6 +1427,8 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                       onClose={() => setPanelDate(null)}
                       highlightedItem={highlightedItem}
                       onHighlightItem={setHighlightedItem}
+                      onOpenDay={openDayView}
+                      asSheet={isDrawerChrome}
                     />
                   )}
                 </div>
@@ -1364,7 +1439,56 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
       </div>
 
       {/* Edit Task Creation Card - Centered */}
-      {editCardPos && editingTask && (
+      {editCardPos && editingTask && (isDrawerChrome ? (
+        <CreateSheet
+          open
+          onClose={() => {
+            setEditCardPos(null);
+            setEditingTask(null);
+          }}
+        >
+          <div ref={editCardRef}>
+            <TaskCreationCard
+              key={editCardKeyRef.current}
+              editingTask={editingTask}
+              showPlusCircle={false}
+              onCancel={() => {
+                setEditCardPos(null);
+                setEditingTask(null);
+              }}
+              onUpdate={(task) => {
+                if (editingTask && editingTask.id) {
+                  const updates = {
+                    title: task.name || task.title,
+                    description: task.description,
+                    deadline: task.deadline,
+                    priority: task.priority,
+                    energy: task.energy,
+                    duration: task.duration,
+                    taskType: task.taskType,
+                    type: task.type,
+                  };
+                  if (task.startTime && task.endTime) {
+                    updates.startTime = task.startTime;
+                    updates.endTime = task.endTime;
+                  }
+                  updateTask(editingTask.id, updates);
+                }
+                setEditCardPos(null);
+                setEditingTask(null);
+              }}
+              flippedX={false}
+              flippedY={false}
+              onDatePickerClose={(closeMethod) => {
+                closeEditDatePickerRef.current = closeMethod;
+              }}
+              onTimePickerClose={(closeMethod) => {
+                closeEditTimePickerRef.current = closeMethod;
+              }}
+            />
+          </div>
+        </CreateSheet>
+      ) : (
         <div
           ref={editCardRef}
           style={{
@@ -1386,7 +1510,6 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
             }}
             onUpdate={(task) => {
               if (editingTask && editingTask.id) {
-                // Convert task data to updates format
                 const updates = {
                   title: task.name || task.title,
                   description: task.description,
@@ -1397,13 +1520,10 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
                   taskType: task.taskType,
                   type: task.type,
                 };
-                
-                // Handle startTime and endTime if present
                 if (task.startTime && task.endTime) {
                   updates.startTime = task.startTime;
                   updates.endTime = task.endTime;
                 }
-                
                 updateTask(editingTask.id, updates);
               }
               setEditCardPos(null);
@@ -1419,7 +1539,7 @@ const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
             }}
           />
         </div>
-      )}
+      ))}
       {conflict && (
         <CalendarConflictModal
           localCount={conflict.localItems.length}
