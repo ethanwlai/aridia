@@ -634,12 +634,19 @@ html.layout-compact .frame-box {
   align-items: center;
   gap: 4px;
   position: absolute;
-  top: 1.2rem;
+  top: 2.15rem;
   left: 1.5rem;
   z-index: 10;
   background: white;
   padding: 4px;
   border-radius: 4px;
+}
+.calendar-week-today-btn.overview-today-btn {
+  position: absolute;
+  top: 0.4rem;
+  left: 1.5rem;
+  z-index: 11;
+  margin-left: 0;
 }
 .calendar-nav-arrow {
   background: #fff;
@@ -660,11 +667,16 @@ html.layout-compact .frame-box {
 }
 
 .calendar-grid--condensed .calendar-nav-bar {
-  top: 10px;
+  top: 2.15rem;
   left: 2px;
   padding: 0;
   gap: 2px;
   background: transparent;
+}
+
+.calendar-grid--condensed .calendar-week-today-btn {
+  top: 0.4rem;
+  left: 2px;
 }
 
 .calendar-grid--condensed .calendar-nav-arrow {
@@ -1008,6 +1020,11 @@ html.layout-drawer .task-actions-dropdown-trigger {
 html.layout-compact .overview-today-btn {
   height: 32px;
   padding: 0 12px;
+}
+
+html.layout-compact .calendar-week-today-btn {
+  height: 22px;
+  padding: 0 8px;
 }
 
 .day-detail-panel--sheet {

@@ -6,6 +6,7 @@ import DayAgenda from './DayAgenda';
 import {
   buildItemsByDate,
   formatDateKey,
+  isSameDate,
   startOfDay,
 } from '../utils/calendarItems';
 import CreateSheet from './CreateSheet';
@@ -54,6 +55,7 @@ const DayView = ({
 }) => {
   const { isCompact, isCoarse } = useLayoutMode();
   const selectedDate = startOfDay(centerDay || new Date());
+  const today = startOfDay(new Date());
   const dateKey = formatDateKey(selectedDate);
 
   const [agendaDrag, setAgendaDrag] = useState(null);
@@ -77,6 +79,7 @@ const DayView = ({
 
   const goPrev = () => setCenterDay?.(addDays(selectedDate, -1));
   const goNext = () => setCenterDay?.(addDays(selectedDate, 1));
+  const goToday = () => setCenterDay?.(today);
 
   const closeCreate = useCallback(() => {
     setCreateSession(null);
@@ -219,6 +222,7 @@ const DayView = ({
       <CalendarViewNav
         onPrev={goPrev}
         onNext={goNext}
+        onToday={isSameDate(selectedDate, today) ? undefined : goToday}
         prevLabel="Previous day"
         nextLabel="Next day"
       >

@@ -7,7 +7,8 @@ import ShortBlockLabel from './ShortBlockLabel';
 import StackedBlockLabel from './StackedBlockLabel';
 import NowMarker from './NowMarker';
 import CreateSheet from './CreateSheet';
-import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK, getItemColor, snapMinutes, getItemDurationMinutes, formatMinutes, toggleCalendarHighlight, getCalendarHighlightOpacity } from '../utils/calendarItems';
+import CalendarViewNav from './CalendarViewNav';
+import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK, getItemColor, snapMinutes, getItemDurationMinutes, formatMinutes, toggleCalendarHighlight, getCalendarHighlightOpacity, startOfDay } from '../utils/calendarItems';
 import { useLayoutMode } from '../hooks/useLayoutMode';
 
 // Global drag state to bypass getData() limitations
@@ -425,6 +426,9 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   const handleNextDay = () => {
     const nextDay = addDays(centerDay, 1);
     setCenterDay(nextDay);
+  };
+  const handleGoToday = () => {
+    setCenterDay(startOfDay(new Date()));
   };
 
   // Helper: get index of today in the window
@@ -1321,29 +1325,17 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         cursor: cursorStyle,
       }}
     >
-      {/* Navigation bar - fixed at top */}
-      <div className="calendar-nav-bar">
-        <button
-          className="calendar-nav-arrow left"
-          onClick={handlePrevDay}
-          aria-label="Previous day"
-          onDoubleClick={e => { e.preventDefault(); e.currentTarget.blur(); }}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" style={{display:'block',margin:'auto'}} fill="black" xmlns="http://www.w3.org/2000/svg">
-            <polygon points="11,3 5,8 11,13" />
-          </svg>
+      {getTodayColumnIndex() === -1 ? (
+        <button type="button" className="overview-today-btn calendar-week-today-btn" onClick={handleGoToday}>
+          Today
         </button>
-        <button
-          className="calendar-nav-arrow right"
-          onClick={handleNextDay}
-          aria-label="Next day"
-          onDoubleClick={e => { e.preventDefault(); e.currentTarget.blur(); }}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" style={{display:'block',margin:'auto'}} fill="black" xmlns="http://www.w3.org/2000/svg">
-            <polygon points="5,3 11,8 5,13" />
-          </svg>
-        </button>
-      </div>
+      ) : null}
+      <CalendarViewNav
+        onPrev={handlePrevDay}
+        onNext={handleNextDay}
+        prevLabel="Previous day"
+        nextLabel="Next day"
+      />
 
       {/* Fixed header row */}
       <div className={`header-row ${isNavigating ? 'header-row-transition' : ''}`} style={{ 
