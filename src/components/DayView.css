@@ -14,8 +14,9 @@
   color: #222;
 }
 
-/* Keep chevrons at Week View’s top: 1.2rem / left: 1.5rem */
+/* Chevrons sit slightly higher than Week View; left stays 1.5rem */
 .day-view .calendar-nav-bar {
+  top: 1.6rem;
   align-items: flex-start;
   overflow: visible;
 }
@@ -24,15 +25,14 @@
   margin-left: 8px;
   min-width: 0;
   line-height: 1;
-  transform: translateY(-6px); /* may sit slightly above the 18px chevrons */
 }
 
 .day-title {
   margin: 0;
   font-family: 'Karla', sans-serif;
-  font-size: 1.5rem;
+  font-size: 1rem;
   font-weight: 700;
-  color: #111;
+  color: #2e0066;
   letter-spacing: 0.04em;
   line-height: 1;
   white-space: nowrap;
