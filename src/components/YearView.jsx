@@ -35,7 +35,7 @@ export default function YearView({
         label={String(year)}
         onPrev={goPrev}
         onNext={goNext}
-        onToday={goToday}
+        onToday={year === today.getFullYear() ? undefined : goToday}
         prevLabel="Previous year"
         nextLabel="Next year"
       />

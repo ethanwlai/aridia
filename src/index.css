@@ -643,10 +643,11 @@ html.layout-compact .frame-box {
 }
 .calendar-week-today-btn.overview-today-btn {
   position: absolute;
-  top: 0.4rem;
+  top: calc(0.4rem - 5px);
   left: 1.5rem;
   z-index: 11;
   margin-left: 0;
+  transform: none;
 }
 .calendar-nav-arrow {
   background: #fff;
@@ -675,7 +676,7 @@ html.layout-compact .frame-box {
 }
 
 .calendar-grid--condensed .calendar-week-today-btn {
-  top: 0.4rem;
+  top: calc(0.4rem - 5px);
   left: 2px;
 }
 
