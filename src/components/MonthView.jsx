@@ -32,7 +32,12 @@ export default function MonthView({
         label={format(monthDate, 'MMMM yyyy')}
         onPrev={goPrev}
         onNext={goNext}
-        onToday={goToday}
+        onToday={
+          monthDate.getFullYear() === today.getFullYear() &&
+          monthDate.getMonth() === today.getMonth()
+            ? undefined
+            : goToday
+        }
         prevLabel="Previous month"
         nextLabel="Next month"
       />
