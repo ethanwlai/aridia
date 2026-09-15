@@ -1,6 +1,7 @@
 // src/components/TaskActionsDropdown.jsx
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useLayoutMode } from '../hooks/useLayoutMode';
 
 // Global ref to track the currently open dropdown instance
 const openDropdownRef = { current: null };
@@ -12,6 +13,13 @@ if (typeof window !== 'undefined') {
 
 const SUBMENU_CLOSE_DELAY_MS = 180;
 const MENU_ITEM_HOVER_BG = 'rgba(160, 132, 232, 0.3)';
+const SUBMENU_MARGIN = 8;
+const SUBMENU_OVERLAP = 4;
+const SUBMENU_ESTIMATED_WIDTH = 158;
+const SUBMENU_ESTIMATED_HEIGHT = {
+  quickMove: 112,
+  extendDuration: 220,
+};
 
 const TaskActionsDropdown = ({ 
   task, 
@@ -26,12 +34,17 @@ const TaskActionsDropdown = ({
   const FLIPPED_Y_EXTRA_OFFSET = 20; // Additional pixels to move up when flippedY is true (increase to move up more)
   const FLIPPED_X_LEFT_OFFSET = -20; // Additional pixels to move left when flippedX is true (negative moves left, positive moves right)
   
+  const { isCoarse } = useLayoutMode();
   const [isOpen, setIsOpen] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState(null); // 'quickMove' | 'extendDuration' | null
   const [position, setPosition] = useState({ top: 0, left: 0, flippedX: false, flippedY: false });
   const [isPositionCalculated, setIsPositionCalculated] = useState(false);
+  const [submenuPos, setSubmenuPos] = useState({ top: 0, left: 0, maxHeight: 0, ready: false });
   const dropdownRef = useRef(null);
   const triggerRef = useRef(null);
+  const quickMoveRowRef = useRef(null);
+  const extendDurationRowRef = useRef(null);
+  const submenuRef = useRef(null);
   const instanceRef = useRef({ setIsOpen, setActiveSubmenu });
   const submenuCloseTimerRef = useRef(null);
   const lockedFlipRef = useRef(null); // preserve flip while menu stays open
@@ -300,11 +313,91 @@ const TaskActionsDropdown = ({
     return { top, left, flippedX, flippedY };
   }, [DROPDOWN_TOP_OFFSET, DROPDOWN_LEFT_OFFSET, FLIPPED_X_LEFT_OFFSET]);
 
+  const calculateSubmenuPosition = useCallback((rowEl, submenuEl, submenuKey, flippedX) => {
+    if (!rowEl) return null;
+
+    const rowRect = rowEl.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const margin = SUBMENU_MARGIN;
+    const overlap = SUBMENU_OVERLAP;
+    const maxHeight = Math.max(0, viewportHeight - margin * 2);
+
+    let width = SUBMENU_ESTIMATED_WIDTH;
+    let naturalHeight = SUBMENU_ESTIMATED_HEIGHT[submenuKey] || SUBMENU_ESTIMATED_HEIGHT.quickMove;
+
+    if (submenuEl) {
+      const measuredWidth = submenuEl.offsetWidth;
+      if (measuredWidth > 0) width = measuredWidth;
+      const measuredHeight = submenuEl.scrollHeight || submenuEl.offsetHeight;
+      if (measuredHeight > 0) naturalHeight = measuredHeight;
+    }
+
+    const height = Math.min(naturalHeight, maxHeight);
+    const scrollable = naturalHeight > maxHeight;
+
+    const preferRight = !flippedX;
+    const rightLeft = rowRect.right - overlap;
+    const leftLeft = rowRect.left - width + overlap;
+    const rightFits = rightLeft >= margin && rightLeft + width <= viewportWidth - margin;
+    const leftFits = leftLeft >= margin && leftLeft + width <= viewportWidth - margin;
+
+    let left;
+    if (preferRight) {
+      left = rightFits ? rightLeft : (leftFits ? leftLeft : rightLeft);
+    } else {
+      left = leftFits ? leftLeft : (rightFits ? rightLeft : leftLeft);
+    }
+
+    const maxLeft = viewportWidth - margin - width;
+    left = Math.max(margin, Math.min(left, maxLeft));
+
+    let top = rowRect.top;
+    if (top + height > viewportHeight - margin) {
+      top = viewportHeight - margin - height;
+    }
+    if (top < margin) {
+      top = margin;
+    }
+
+    // Parent menu uses transform (translateZ / flippedY), which would make
+    // position:fixed a containing-block trap. Convert viewport coords to
+    // offsets relative to the row so absolute positioning stays on-screen.
+    return {
+      top: top - rowRect.top,
+      left: left - rowRect.left,
+      maxHeight: scrollable ? maxHeight : 0,
+    };
+  }, []);
+
+  const getActiveSubmenuRow = useCallback((submenu = activeSubmenu) => {
+    if (submenu === 'quickMove') return quickMoveRowRef.current;
+    if (submenu === 'extendDuration') return extendDurationRowRef.current;
+    return null;
+  }, [activeSubmenu]);
+
+  const updateSubmenuPosition = useCallback(() => {
+    if (!activeSubmenu) {
+      setSubmenuPos({ top: 0, left: 0, maxHeight: 0, ready: false });
+      return;
+    }
+    const next = calculateSubmenuPosition(
+      getActiveSubmenuRow(),
+      submenuRef.current,
+      activeSubmenu,
+      position.flippedX
+    );
+    if (next) {
+      setSubmenuPos({ ...next, ready: true });
+    }
+  }, [activeSubmenu, calculateSubmenuPosition, getActiveSubmenuRow, position.flippedX]);
+
   // Calculate and update dropdown position when it opens (not when submenu toggles)
   useLayoutEffect(() => {
     if (!isOpen) {
       setPosition({ top: 0, left: 0, flippedX: false, flippedY: false });
       setIsPositionCalculated(false);
+      setSubmenuPos({ top: 0, left: 0, maxHeight: 0, ready: false });
       lockedFlipRef.current = null;
       return;
     }
@@ -336,6 +429,21 @@ const TaskActionsDropdown = ({
       }
     });
   }, [isOpen, calculatePosition]);
+
+  // Position submenu independently so it stays inside the viewport
+  useLayoutEffect(() => {
+    if (!isOpen || !activeSubmenu) {
+      setSubmenuPos({ top: 0, left: 0, maxHeight: 0, ready: false });
+      return;
+    }
+
+    updateSubmenuPosition();
+
+    const rafId = requestAnimationFrame(() => {
+      updateSubmenuPosition();
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [isOpen, activeSubmenu, position.top, position.left, position.flippedX, updateSubmenuPosition]);
 
   // Recalculate position on scroll to keep dropdown aligned with trigger
   useEffect(() => {
@@ -373,6 +481,7 @@ const TaskActionsDropdown = ({
         if (newPosition) {
           setPosition(newPosition);
         }
+        updateSubmenuPosition();
         rafId = null;
       });
     };
@@ -387,7 +496,23 @@ const TaskActionsDropdown = ({
         scrollContainer.removeEventListener('scroll', handleScroll, { passive: true });
       }
     };
-  }, [isOpen, isPositionCalculated, calculatePosition]);
+  }, [isOpen, isPositionCalculated, calculatePosition, updateSubmenuPosition]);
+
+  // Recalculate submenu position on viewport changes
+  useEffect(() => {
+    if (!isOpen || !activeSubmenu) return;
+
+    const handleViewportChange = () => {
+      updateSubmenuPosition();
+    };
+
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('orientationchange', handleViewportChange);
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('orientationchange', handleViewportChange);
+    };
+  }, [isOpen, activeSubmenu, updateSubmenuPosition]);
 
   const menuItemStyle = {
     padding: '8px 12px',
@@ -407,19 +532,17 @@ const TaskActionsDropdown = ({
     },
   };
 
-  // Overlap parent menu instead of a gap so the pointer never leaves both surfaces
+  // Viewport-clamped flyout; overlap parent slightly so the pointer never leaves both surfaces
   const submenuStyle = {
     position: 'absolute',
-    left: position.flippedX ? 'auto' : '100%',
-    right: position.flippedX ? '100%' : 'auto',
-    top: 0,
-    marginLeft: position.flippedX ? '0' : '-4px',
-    marginRight: position.flippedX ? '-4px' : '0',
-    paddingLeft: position.flippedX ? '0' : '8px',
-    paddingRight: position.flippedX ? '8px' : '0',
-    background: 'transparent',
+    top: `${submenuPos.top}px`,
+    left: `${submenuPos.left}px`,
     minWidth: '158px',
-    zIndex: 1,
+    maxHeight: submenuPos.maxHeight ? `${submenuPos.maxHeight}px` : undefined,
+    overflowY: submenuPos.maxHeight ? 'auto' : undefined,
+    zIndex: 10000,
+    visibility: submenuPos.ready ? 'visible' : 'hidden',
+    pointerEvents: 'auto',
   };
 
   const submenuInnerStyle = {
@@ -506,6 +629,7 @@ const TaskActionsDropdown = ({
             minWidth: '180px',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
             transform: position.flippedY ? `translateY(calc(-100% - ${FLIPPED_Y_EXTRA_OFFSET}px))` : 'translateZ(0)', // Flip Y if needed, otherwise force hardware acceleration
+            overflow: 'visible',
             pointerEvents: 'auto', // Ensure it can receive pointer events
           }}
           onMouseDown={(e) => {
@@ -542,11 +666,12 @@ const TaskActionsDropdown = ({
           {/* Quick Move */}
           {onQuickMove && (
             <div
+              ref={quickMoveRowRef}
               style={{
                 position: 'relative',
               }}
-              onMouseEnter={() => openSubmenu('quickMove')}
-              onMouseLeave={scheduleCloseSubmenu}
+              onMouseEnter={() => { if (!isCoarse) openSubmenu('quickMove'); }}
+              onMouseLeave={isCoarse ? undefined : scheduleCloseSubmenu}
             >
               <div
                 style={{
@@ -584,10 +709,11 @@ const TaskActionsDropdown = ({
               {/* Quick Move Submenu */}
               {activeSubmenu === 'quickMove' && (
                 <div
+                  ref={submenuRef}
                   data-quick-move-submenu
                   style={submenuStyle}
-                  onMouseEnter={() => openSubmenu('quickMove')}
-                  onMouseLeave={scheduleCloseSubmenu}
+                  onMouseEnter={() => { if (!isCoarse) openSubmenu('quickMove'); }}
+                  onMouseLeave={isCoarse ? undefined : scheduleCloseSubmenu}
                 >
                   <div style={submenuInnerStyle}>
                     <div
@@ -623,11 +749,12 @@ const TaskActionsDropdown = ({
           {/* Adjust Duration */}
           {onExtendDuration && (
             <div
+              ref={extendDurationRowRef}
               style={{
                 position: 'relative',
               }}
-              onMouseEnter={() => openSubmenu('extendDuration')}
-              onMouseLeave={scheduleCloseSubmenu}
+              onMouseEnter={() => { if (!isCoarse) openSubmenu('extendDuration'); }}
+              onMouseLeave={isCoarse ? undefined : scheduleCloseSubmenu}
             >
               <div
                 style={{
@@ -663,10 +790,11 @@ const TaskActionsDropdown = ({
               {/* Adjust Duration Submenu */}
               {activeSubmenu === 'extendDuration' && (
                 <div
+                  ref={submenuRef}
                   data-extend-duration-submenu
                   style={submenuStyle}
-                  onMouseEnter={() => openSubmenu('extendDuration')}
-                  onMouseLeave={scheduleCloseSubmenu}
+                  onMouseEnter={() => { if (!isCoarse) openSubmenu('extendDuration'); }}
+                  onMouseLeave={isCoarse ? undefined : scheduleCloseSubmenu}
                 >
                   <div style={submenuInnerStyle}>
                     <div
