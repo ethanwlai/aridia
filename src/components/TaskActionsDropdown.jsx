@@ -21,6 +21,16 @@ const SUBMENU_ESTIMATED_HEIGHT = {
   extendDuration: 220,
 };
 
+const getVisualViewportRect = () => {
+  const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+  return {
+    originX: vv?.offsetLeft ?? 0,
+    originY: vv?.offsetTop ?? 0,
+    width: vv?.width ?? window.innerWidth,
+    height: vv?.height ?? window.innerHeight,
+  };
+};
+
 const TaskActionsDropdown = ({ 
   task, 
   onAutoSchedule, 
@@ -84,10 +94,12 @@ const TaskActionsDropdown = ({
     function handleClickOutside(event) {
       const target = event.target;
       
-      // Don't close if clicking inside this dropdown or its trigger
+      // Don't close if clicking inside this dropdown, its trigger, or a portaled submenu
       if (dropdownRef.current && dropdownRef.current.contains(target)) return;
       if (triggerRef.current && triggerRef.current.contains(target)) return;
+      if (submenuRef.current && submenuRef.current.contains(target)) return;
       if (target.closest('.task-actions-dropdown-menu')) return;
+      if (target.closest('[data-quick-move-submenu], [data-extend-duration-submenu]')) return;
 
       // Calendar blocks handle dismiss themselves so the same mousedown
       // does not also select the cell (see CalendarGrid onMouseDown).
@@ -317,11 +329,14 @@ const TaskActionsDropdown = ({
     if (!rowEl) return null;
 
     const rowRect = rowEl.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
+    const { originX, originY, width: viewportWidth, height: viewportHeight } = getVisualViewportRect();
     const margin = SUBMENU_MARGIN;
     const overlap = SUBMENU_OVERLAP;
     const maxHeight = Math.max(0, viewportHeight - margin * 2);
+
+    const rowLeft = rowRect.left - originX;
+    const rowRight = rowRect.right - originX;
+    const rowTop = rowRect.top - originY;
 
     let width = SUBMENU_ESTIMATED_WIDTH;
     let naturalHeight = SUBMENU_ESTIMATED_HEIGHT[submenuKey] || SUBMENU_ESTIMATED_HEIGHT.quickMove;
@@ -337,8 +352,8 @@ const TaskActionsDropdown = ({
     const scrollable = naturalHeight > maxHeight;
 
     const preferRight = !flippedX;
-    const rightLeft = rowRect.right - overlap;
-    const leftLeft = rowRect.left - width + overlap;
+    const rightLeft = rowRight - overlap;
+    const leftLeft = rowLeft - width + overlap;
     const rightFits = rightLeft >= margin && rightLeft + width <= viewportWidth - margin;
     const leftFits = leftLeft >= margin && leftLeft + width <= viewportWidth - margin;
 
@@ -352,7 +367,7 @@ const TaskActionsDropdown = ({
     const maxLeft = viewportWidth - margin - width;
     left = Math.max(margin, Math.min(left, maxLeft));
 
-    let top = rowRect.top;
+    let top = rowTop;
     if (top + height > viewportHeight - margin) {
       top = viewportHeight - margin - height;
     }
@@ -360,12 +375,9 @@ const TaskActionsDropdown = ({
       top = margin;
     }
 
-    // Parent menu uses transform (translateZ / flippedY), which would make
-    // position:fixed a containing-block trap. Convert viewport coords to
-    // offsets relative to the row so absolute positioning stays on-screen.
     return {
-      top: top - rowRect.top,
-      left: left - rowRect.left,
+      top: originY + top,
+      left: originX + left,
       maxHeight: scrollable ? maxHeight : 0,
     };
   }, []);
@@ -498,21 +510,33 @@ const TaskActionsDropdown = ({
     };
   }, [isOpen, isPositionCalculated, calculatePosition, updateSubmenuPosition]);
 
-  // Recalculate submenu position on viewport changes
+  // Recalculate menu and submenu position on viewport changes
   useEffect(() => {
-    if (!isOpen || !activeSubmenu) return;
+    if (!isOpen || !isPositionCalculated) return;
 
     const handleViewportChange = () => {
+      if (!triggerRef.current) return;
+      lockedFlipRef.current = null;
+      const newPosition = calculatePosition(null);
+      if (newPosition) {
+        lockedFlipRef.current = { flippedX: newPosition.flippedX, flippedY: newPosition.flippedY };
+        setPosition(newPosition);
+      }
       updateSubmenuPosition();
     };
 
     window.addEventListener('resize', handleViewportChange);
     window.addEventListener('orientationchange', handleViewportChange);
+    const visualViewport = window.visualViewport;
+    visualViewport?.addEventListener('resize', handleViewportChange);
+    visualViewport?.addEventListener('scroll', handleViewportChange);
     return () => {
       window.removeEventListener('resize', handleViewportChange);
       window.removeEventListener('orientationchange', handleViewportChange);
+      visualViewport?.removeEventListener('resize', handleViewportChange);
+      visualViewport?.removeEventListener('scroll', handleViewportChange);
     };
-  }, [isOpen, activeSubmenu, updateSubmenuPosition]);
+  }, [isOpen, isPositionCalculated, activeSubmenu, calculatePosition, updateSubmenuPosition]);
 
   const menuItemStyle = {
     padding: '8px 12px',
@@ -532,9 +556,9 @@ const TaskActionsDropdown = ({
     },
   };
 
-  // Viewport-clamped flyout; overlap parent slightly so the pointer never leaves both surfaces
+  // Portaled to document.body so parent transform/border-radius cannot clip it
   const submenuStyle = {
-    position: 'absolute',
+    position: 'fixed',
     top: `${submenuPos.top}px`,
     left: `${submenuPos.left}px`,
     minWidth: '158px',
@@ -705,44 +729,6 @@ const TaskActionsDropdown = ({
                   <polyline points="9 18 15 12 9 6"></polyline>
                 </svg>
               </div>
-
-              {/* Quick Move Submenu */}
-              {activeSubmenu === 'quickMove' && (
-                <div
-                  ref={submenuRef}
-                  data-quick-move-submenu
-                  style={submenuStyle}
-                  onMouseEnter={() => { if (!isCoarse) openSubmenu('quickMove'); }}
-                  onMouseLeave={isCoarse ? undefined : scheduleCloseSubmenu}
-                >
-                  <div style={submenuInnerStyle}>
-                    <div
-                      style={menuItemStyle}
-                      {...bindMenuItemHover}
-                      onMouseDown={(e) => handleQuickMove('today', e)}
-                      onClick={(e) => handleQuickMove('today', e)}
-                    >
-                      Move to Today
-                    </div>
-                    <div
-                      style={menuItemStyle}
-                      {...bindMenuItemHover}
-                      onMouseDown={(e) => handleQuickMove('tomorrow', e)}
-                      onClick={(e) => handleQuickMove('tomorrow', e)}
-                    >
-                      Move to Tomorrow
-                    </div>
-                    <div
-                      style={menuItemStyle}
-                      {...bindMenuItemHover}
-                      onMouseDown={(e) => handleQuickMove('nextWeek', e)}
-                      onClick={(e) => handleQuickMove('nextWeek', e)}
-                    >
-                      Move to Next Week
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -786,74 +772,124 @@ const TaskActionsDropdown = ({
                   <polyline points="9 18 15 12 9 6"></polyline>
                 </svg>
               </div>
-
-              {/* Adjust Duration Submenu */}
-              {activeSubmenu === 'extendDuration' && (
-                <div
-                  ref={submenuRef}
-                  data-extend-duration-submenu
-                  style={submenuStyle}
-                  onMouseEnter={() => { if (!isCoarse) openSubmenu('extendDuration'); }}
-                  onMouseLeave={isCoarse ? undefined : scheduleCloseSubmenu}
-                >
-                  <div style={submenuInnerStyle}>
-                    <div
-                      style={menuItemStyle}
-                      {...bindMenuItemHover}
-                      onMouseDown={(e) => handleExtendDuration(15, e)}
-                      onClick={(e) => handleExtendDuration(15, e)}
-                    >
-                      +15 min
-                    </div>
-                    <div
-                      style={menuItemStyle}
-                      {...bindMenuItemHover}
-                      onMouseDown={(e) => handleExtendDuration(30, e)}
-                      onClick={(e) => handleExtendDuration(30, e)}
-                    >
-                      +30 min
-                    </div>
-                    <div
-                      style={menuItemStyle}
-                      {...bindMenuItemHover}
-                      onMouseDown={(e) => handleExtendDuration(60, e)}
-                      onClick={(e) => handleExtendDuration(60, e)}
-                    >
-                      +60 min
-                    </div>
-                    <div
-                      style={{
-                        ...menuItemStyle,
-                        borderTop: '1px solid rgba(160, 132, 232, 0.3)',
-                        marginTop: '4px',
-                      }}
-                      {...bindMenuItemHover}
-                      onMouseDown={(e) => handleExtendDuration(-15, e)}
-                      onClick={(e) => handleExtendDuration(-15, e)}
-                    >
-                      -15 min
-                    </div>
-                    <div
-                      style={menuItemStyle}
-                      {...bindMenuItemHover}
-                      onMouseDown={(e) => handleExtendDuration(-30, e)}
-                      onClick={(e) => handleExtendDuration(-30, e)}
-                    >
-                      -30 min
-                    </div>
-                    <div
-                      style={menuItemStyle}
-                      {...bindMenuItemHover}
-                      onMouseDown={(e) => handleExtendDuration(-60, e)}
-                      onClick={(e) => handleExtendDuration(-60, e)}
-                    >
-                      -60 min
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
+        </div>,
+        document.body
+      )}
+
+      {isOpen && isPositionCalculated && activeSubmenu === 'quickMove' && createPortal(
+        <div
+          ref={submenuRef}
+          className="task-actions-dropdown-submenu"
+          data-quick-move-submenu
+          style={submenuStyle}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
+          onMouseEnter={() => { if (!isCoarse) openSubmenu('quickMove'); }}
+          onMouseLeave={isCoarse ? undefined : scheduleCloseSubmenu}
+        >
+          <div style={submenuInnerStyle}>
+            <div
+              style={menuItemStyle}
+              {...bindMenuItemHover}
+              onMouseDown={(e) => handleQuickMove('today', e)}
+              onClick={(e) => handleQuickMove('today', e)}
+            >
+              Move to Today
+            </div>
+            <div
+              style={menuItemStyle}
+              {...bindMenuItemHover}
+              onMouseDown={(e) => handleQuickMove('tomorrow', e)}
+              onClick={(e) => handleQuickMove('tomorrow', e)}
+            >
+              Move to Tomorrow
+            </div>
+            <div
+              style={menuItemStyle}
+              {...bindMenuItemHover}
+              onMouseDown={(e) => handleQuickMove('nextWeek', e)}
+              onClick={(e) => handleQuickMove('nextWeek', e)}
+            >
+              Move to Next Week
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {isOpen && isPositionCalculated && activeSubmenu === 'extendDuration' && createPortal(
+        <div
+          ref={submenuRef}
+          className="task-actions-dropdown-submenu"
+          data-extend-duration-submenu
+          style={submenuStyle}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
+          onMouseEnter={() => { if (!isCoarse) openSubmenu('extendDuration'); }}
+          onMouseLeave={isCoarse ? undefined : scheduleCloseSubmenu}
+        >
+          <div style={submenuInnerStyle}>
+            <div
+              style={menuItemStyle}
+              {...bindMenuItemHover}
+              onMouseDown={(e) => handleExtendDuration(15, e)}
+              onClick={(e) => handleExtendDuration(15, e)}
+            >
+              +15 min
+            </div>
+            <div
+              style={menuItemStyle}
+              {...bindMenuItemHover}
+              onMouseDown={(e) => handleExtendDuration(30, e)}
+              onClick={(e) => handleExtendDuration(30, e)}
+            >
+              +30 min
+            </div>
+            <div
+              style={menuItemStyle}
+              {...bindMenuItemHover}
+              onMouseDown={(e) => handleExtendDuration(60, e)}
+              onClick={(e) => handleExtendDuration(60, e)}
+            >
+              +60 min
+            </div>
+            <div
+              style={{
+                ...menuItemStyle,
+                borderTop: '1px solid rgba(160, 132, 232, 0.3)',
+                marginTop: '4px',
+              }}
+              {...bindMenuItemHover}
+              onMouseDown={(e) => handleExtendDuration(-15, e)}
+              onClick={(e) => handleExtendDuration(-15, e)}
+            >
+              -15 min
+            </div>
+            <div
+              style={menuItemStyle}
+              {...bindMenuItemHover}
+              onMouseDown={(e) => handleExtendDuration(-30, e)}
+              onClick={(e) => handleExtendDuration(-30, e)}
+            >
+              -30 min
+            </div>
+            <div
+              style={menuItemStyle}
+              {...bindMenuItemHover}
+              onMouseDown={(e) => handleExtendDuration(-60, e)}
+              onClick={(e) => handleExtendDuration(-60, e)}
+            >
+              -60 min
+            </div>
+          </div>
         </div>,
         document.body
       )}
