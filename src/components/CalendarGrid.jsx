@@ -206,7 +206,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   useEffect(() => {
     function handleClick(e) {
       // Keep selection when interacting with the portaled actions menu
-      if (e.target.closest('.task-actions-dropdown-menu') || e.target.closest('.task-actions-dropdown-trigger')) {
+      if (e.target.closest('.task-actions-dropdown-menu') || e.target.closest('.task-actions-dropdown-submenu') || e.target.closest('.task-actions-dropdown-trigger')) {
         return;
       }
       // Only reset if not clicking a calendar-time-block
@@ -1741,7 +1741,8 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                       e.target.closest('.task-delete-btn') ||
                       e.target.closest('.task-edit-btn') ||
                       e.target.closest('.task-actions-dropdown-trigger') ||
-                      e.target.closest('.task-actions-dropdown-menu')
+                      e.target.closest('.task-actions-dropdown-menu') ||
+                      e.target.closest('.task-actions-dropdown-submenu')
                     ) {
                       e.preventDefault();
                       e.stopPropagation();

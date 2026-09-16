@@ -262,7 +262,8 @@ export default function DayTimeline({
       e.target.closest('.task-delete-btn') ||
       e.target.closest('.task-edit-btn') ||
       e.target.closest('.task-actions-dropdown-trigger') ||
-      e.target.closest('.task-actions-dropdown-menu')
+      e.target.closest('.task-actions-dropdown-menu') ||
+      e.target.closest('.task-actions-dropdown-submenu')
     ) {
       e.stopPropagation();
       closeCreate();

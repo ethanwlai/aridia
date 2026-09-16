@@ -53,6 +53,7 @@ const ITEM_ACTION_SELECTOR = [
   '.task-edit-btn',
   '.task-actions-dropdown-trigger',
   '.task-actions-dropdown-menu',
+  '.task-actions-dropdown-submenu',
   '.day-agenda-row-actions',
 ].join(', ');
 
