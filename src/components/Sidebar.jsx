@@ -27,13 +27,13 @@ function isTaskCurrent(task) {
   return now >= start && now <= end;
 }
 
-const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick, highlightedItem, onHighlightItem, onAutoSchedule, onQuickMove, onExtendDuration, onEdit }) => {
+const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick, highlightedItem, onHighlightItem, onAutoSchedule, onQuickMove, onExtendDuration, onEdit, allowCalendarDrag = true }) => {
   // Weather state
   const [coords, setCoords] = useState(null);
   const [weather, setWeather] = useState({}); // { [dateStr]: { high, low, icon, description } }
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState(null);
-  // true = day task list open; default {} keeps all days collapsed on start/refresh
+  // Override map: undefined = default (open if the day has tasks), true = forced open, false = user-collapsed
   const [expandedDays, setExpandedDays] = useState({});
   const API_KEY = '10b3b3424c0a034c748c889bdcd8ee4e'; // <-- your API key
 
@@ -354,20 +354,54 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
     });
   }, [tasks]);
 
-
+  const datesWithTasks = useMemo(() => {
+    const dates = new Set();
+    tasks.forEach((task) => {
+      if (!task.deadline) return;
+      const d = parseLocalDate(task.deadline);
+      if (d) dates.add(format(d, 'yyyy-MM-dd'));
+    });
+    return dates;
+  }, [tasks]);
 
   // Auto-scroll sidebar to show current calendar days when navigation changes
   const sidebarContentRef = useRef(null);
   const hasSyncedCenterDayRef = useRef(false);
+  const prevDatesWithTasksRef = useRef(new Set());
 
   const expandDay = useCallback((dateStr) => {
     if (!dateStr) return;
-    setExpandedDays((prev) => (prev[dateStr] ? prev : { ...prev, [dateStr]: true }));
+    setExpandedDays((prev) => (prev[dateStr] === true ? prev : { ...prev, [dateStr]: true }));
   }, []);
 
-  const toggleDayExpanded = useCallback((dateStr) => {
-    setExpandedDays((prev) => ({ ...prev, [dateStr]: !prev[dateStr] }));
+  const toggleDayExpanded = useCallback((dateStr, hasTasks) => {
+    setExpandedDays((prev) => {
+      const currentlyExpanded = hasTasks ? prev[dateStr] !== false : !!prev[dateStr];
+      return { ...prev, [dateStr]: !currentlyExpanded };
+    });
   }, []);
+
+  // If a date newly gains tasks, drop a collapsed override so it opens by default
+  useEffect(() => {
+    const prevDates = prevDatesWithTasksRef.current;
+    const newlyAdded = [];
+    datesWithTasks.forEach((dateStr) => {
+      if (!prevDates.has(dateStr)) newlyAdded.push(dateStr);
+    });
+    if (newlyAdded.length > 0) {
+      setExpandedDays((prev) => {
+        let next = prev;
+        newlyAdded.forEach((dateStr) => {
+          if (prev[dateStr] === false) {
+            if (next === prev) next = { ...prev };
+            delete next[dateStr];
+          }
+        });
+        return next;
+      });
+    }
+    prevDatesWithTasksRef.current = datesWithTasks;
+  }, [datesWithTasks]);
   
   useEffect(() => {
     if (highlightedItem) return;
@@ -377,7 +411,7 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
       leftmostDay.setDate(centerDay.getDate() - 2);
       const leftmostDayStr = format(leftmostDay, 'yyyy-MM-dd');
 
-      // Keep all days collapsed on first load/refresh; expand only on later navigation
+      // On later navigation, expand the leftmost calendar day; tasked days already default open
       if (hasSyncedCenterDayRef.current) {
         expandDay(leftmostDayStr);
       } else {
@@ -446,7 +480,7 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
           const tasksForDay = getTasksForDay(date);
           const dateStr = format(date, 'yyyy-MM-dd');
           const hasTasks = tasksForDay.length > 0;
-          const isExpanded = !!expandedDays[dateStr];
+          const isExpanded = hasTasks ? expandedDays[dateStr] !== false : !!expandedDays[dateStr];
 
           return (
             <div key={index} className={styles.dayBlock} data-date={dateStr}>
@@ -459,7 +493,7 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    toggleDayExpanded(dateStr);
+                    toggleDayExpanded(dateStr, hasTasks);
                   }}
                 >
                   <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -571,6 +605,7 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
                         }}
 
                         onMouseDown={(e) => {
+                          if (!allowCalendarDrag) return;
                           // Start custom drag for sidebar tasks and events
                           e.preventDefault();
                           e.stopPropagation();
