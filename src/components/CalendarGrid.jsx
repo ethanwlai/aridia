@@ -8,7 +8,7 @@ import StackedBlockLabel from './StackedBlockLabel';
 import NowMarker from './NowMarker';
 import CreateSheet from './CreateSheet';
 import CalendarViewNav from './CalendarViewNav';
-import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK, getItemColor, snapMinutes, getItemDurationMinutes, formatMinutes, toggleCalendarHighlight, getCalendarHighlightOpacity, startOfDay } from '../utils/calendarItems';
+import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK, getItemColor, snapMinutes, getItemDurationMinutes, formatMinutes, toggleCalendarHighlight, getCalendarHighlightOpacity, isCalendarHighlighted, startOfDay } from '../utils/calendarItems';
 import { useLayoutMode } from '../hooks/useLayoutMode';
 
 // Global drag state to bypass getData() limitations
@@ -16,12 +16,40 @@ window.globalDragState = window.globalDragState || {
   currentTask: null,
   startCustomDrag: false,
   startX: null,
-  startY: null
+  startY: null,
+  suppressHighlightNavigation: false,
 };
 
 const hours = Array.from({ length: 24 }, (_, i) => i);
 const ROW_HEIGHT = 50;
 const SNAP_MINUTES = 5;
+const DRAG_ARM_THRESHOLD = 6;
+const INACTIVE_CUSTOM_DRAG = {
+  isActive: false,
+  startX: 0,
+  startY: 0,
+  currentX: 0,
+  currentY: 0,
+  taskData: null,
+  isFromSidebar: false,
+  isMovingExistingTask: false,
+  clickOffsetY: 0,
+};
+
+function taskDataFromBlock(block) {
+  const source = block._group ? block.tasks[0] : block;
+  return {
+    ...block,
+    id: source.id,
+    title: source.title,
+    startTime: source.startTime,
+    endTime: source.endTime,
+    deadline: source.deadline,
+    taskType: source.taskType,
+    duration: source.duration,
+    type: source.type,
+  };
+}
 const MAX_START_MINUTES = 24 * 60 - SNAP_MINUTES;
 
 function getHoveredCalendarCell(e) {
@@ -497,24 +525,29 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   const [isMovingTask, setIsMovingTask] = useState(false); // Whether we're in move mode
   
   // Custom drag system state (parallel to HTML5 drag)
-  const [customDragState, setCustomDragState] = useState({
-    isActive: false,
-    startX: 0,
-    startY: 0,
-    currentX: 0,
-    currentY: 0,
-    taskData: null,
-    isFromSidebar: false,
-    isMovingExistingTask: false,
-    clickOffsetY: 0 // Track where user clicked within the time block
-  });
+  const [customDragState, setCustomDragState] = useState(INACTIVE_CUSTOM_DRAG);
+  const customDragRef = useRef(INACTIVE_CUSTOM_DRAG);
+  const dragPreviewRef = useRef(null);
+  const highlightedItemRef = useRef(highlightedItem);
+  highlightedItemRef.current = highlightedItem;
+  const onHighlightItemRef = useRef(onHighlightItem);
+  onHighlightItemRef.current = onHighlightItem;
+  const stopWeekGestureRef = useRef(null);
+
+  const setDragPreviewSynced = useCallback((preview) => {
+    dragPreviewRef.current = preview;
+    setDragPreview(preview);
+  }, []);
   
   // Cleanup effect to clear drag preview when drag states are inactive
   useEffect(() => {
     if (!dragState.isActive && !customDragState.isActive) {
+      dragPreviewRef.current = null;
       setDragPreview(null);
     }
   }, [dragState.isActive, customDragState.isActive]);
+
+  useEffect(() => () => stopWeekGestureRef.current?.(), []);
   
   // Handler for user scroll
   const handleUserScroll = () => {
@@ -1024,106 +1057,101 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   
 
   // Custom drag handlers (parallel to HTML5 drag system)
-  const startCustomDrag = useCallback((e, taskData, isFromSidebar = false) => {
+  const startCustomDrag = useCallback((e, taskData, isFromSidebar = false, presetOffsetY = null) => {
     e.preventDefault();
     e.stopPropagation();
-    
 
-    
-    // Calculate click offset within the time block
     let clickOffsetY = 0;
     if (!isFromSidebar) {
-      // For existing tasks, calculate where in the block the user clicked
-      const blockElement = e.currentTarget;
-      const blockRect = blockElement.getBoundingClientRect();
-      clickOffsetY = e.clientY - blockRect.top;
+      if (typeof presetOffsetY === 'number') {
+        clickOffsetY = presetOffsetY;
+      } else if (e.currentTarget?.getBoundingClientRect) {
+        const blockRect = e.currentTarget.getBoundingClientRect();
+        clickOffsetY = e.clientY - blockRect.top;
+      }
     }
-    
-    setCustomDragState({
+
+    const nextDrag = {
       isActive: true,
       startX: e.clientX,
       startY: e.clientY,
       currentX: e.clientX,
       currentY: e.clientY,
-      taskData: taskData,
-      isFromSidebar: isFromSidebar,
+      taskData,
+      isFromSidebar,
       isMovingExistingTask: !isFromSidebar && taskData.startTime && taskData.endTime,
-      clickOffsetY: clickOffsetY
-    });
-    
-    // If moving an existing task, hide the original
-    if (!isFromSidebar && taskData.startTime && taskData.endTime) {
+      clickOffsetY,
+    };
+    customDragRef.current = nextDrag;
+    setCustomDragState(nextDrag);
+    if (isFromSidebar && window.globalDragState) {
+      window.globalDragState.suppressClick = true;
+    }
+
+    if (nextDrag.isMovingExistingTask) {
       setIsMovingTask(true);
       setMovedTaskId(taskData.id);
     }
-  }, []);
+
+    const position = calculatePosition(e, getHoveredCalendarCell(e));
+    if (position && taskData) {
+      setDragPreviewSynced(calculateDragPreview(position, taskData, clickOffsetY));
+    }
+  }, [calculatePosition, calculateDragPreview, setDragPreviewSynced]);
 
   const handleCustomDragMove = useCallback((e) => {
-    if (!customDragState.isActive) return;
-    
+    const drag = customDragRef.current;
+    if (!drag.isActive) return;
+
     e.preventDefault();
     e.stopPropagation();
-    
 
-    
-    // Use requestAnimationFrame for smoother state updates
-    requestAnimationFrame(() => {
-      setCustomDragState(prev => ({
-        ...prev,
-        currentX: e.clientX,
-        currentY: e.clientY
-      }));
-    });
-    
-    // Calculate position and update preview with optimized timing
+    const nextDrag = {
+      ...drag,
+      currentX: e.clientX,
+      currentY: e.clientY,
+    };
+    customDragRef.current = nextDrag;
+    setCustomDragState(nextDrag);
+
     const position = calculatePosition(e, getHoveredCalendarCell(e));
-    
-    // Update preview immediately for responsiveness, then optimize with requestAnimationFrame
-    if (position && customDragState.taskData) {
-      const preview = calculateDragPreview(position, customDragState.taskData, customDragState.clickOffsetY);
-      setDragPreview(preview);
+    if (position && nextDrag.taskData) {
+      setDragPreviewSynced(calculateDragPreview(position, nextDrag.taskData, nextDrag.clickOffsetY));
     }
-    
-    // Handle edge scrolling
+
     if (scrollWrapperRef.current) {
       const rect = scrollWrapperRef.current.getBoundingClientRect();
-      const baseScrollSpeed = 20; // Increased from 10
-      const edgeThreshold = 100; // Increased from 50 - triggers scrolling sooner
+      const baseScrollSpeed = 20;
+      const edgeThreshold = 100;
       const distanceFromTop = e.clientY - rect.top;
       const distanceFromBottom = rect.bottom - e.clientY;
-      
+
       if (distanceFromTop < edgeThreshold) {
-        // Progressive scroll speed - faster when closer to edge
         const speedMultiplier = Math.max(1, (edgeThreshold - distanceFromTop) / 20);
         const scrollSpeed = Math.round(baseScrollSpeed * speedMultiplier);
         scrollWrapperRef.current.scrollTop -= scrollSpeed;
       } else if (distanceFromBottom < edgeThreshold) {
-        // Progressive scroll speed - faster when closer to edge
         const speedMultiplier = Math.max(1, (edgeThreshold - distanceFromBottom) / 20);
         const scrollSpeed = Math.round(baseScrollSpeed * speedMultiplier);
         scrollWrapperRef.current.scrollTop += scrollSpeed;
       }
-      
-      // Update preview after scroll to ensure it stays with cursor
-      requestAnimationFrame(() => {
-        if (customDragState.isActive && customDragState.taskData) {
-          const updatedPosition = calculatePosition(e, getHoveredCalendarCell(e));
-          if (updatedPosition) {
-            const updatedPreview = calculateDragPreview(updatedPosition, customDragState.taskData, customDragState.clickOffsetY);
-            setDragPreview(updatedPreview);
-          }
+
+      if (position && nextDrag.taskData) {
+        const updatedPosition = calculatePosition(e, getHoveredCalendarCell(e));
+        if (updatedPosition) {
+          setDragPreviewSynced(calculateDragPreview(updatedPosition, nextDrag.taskData, nextDrag.clickOffsetY));
         }
-      });
+      }
     }
-  }, [customDragState.isActive, customDragState.taskData, customDragState.clickOffsetY, calculatePosition, calculateDragPreview]);
+  }, [calculatePosition, calculateDragPreview, setDragPreviewSynced]);
 
   const handleCustomDragEnd = useCallback((e) => {
-    if (!customDragState.isActive) return;
-    
+    const drag = customDragRef.current;
+    if (!drag.isActive) return;
+
     e.preventDefault();
     e.stopPropagation();
-    
-    // Cancel any pending animation frames
+
     if (positionUpdateRef.current) {
       cancelAnimationFrame(positionUpdateRef.current);
       positionUpdateRef.current = null;
@@ -1132,22 +1160,22 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       cancelAnimationFrame(previewUpdateRef.current);
       previewUpdateRef.current = null;
     }
-    
-    // Check if we're over a valid drop area and use the current preview position
-    if (dragPreview && customDragState.taskData) {
-      const task = customDragState.taskData;
-      const duration = typeof dragPreview.duration === 'number'
-        ? dragPreview.duration
+
+    const preview = dragPreviewRef.current;
+    if (preview && drag.taskData) {
+      const task = drag.taskData;
+      const duration = typeof preview.duration === 'number'
+        ? preview.duration
         : getItemDurationMinutes(task);
 
       const position = calculatePosition(e, getHoveredCalendarCell(e));
-      const snappedStart = typeof dragPreview.startMinutes === 'number'
+      const snappedStart = typeof preview.startMinutes === 'number'
         ? {
-            startMinutes: dragPreview.startMinutes,
-            hour: dragPreview.startHour,
-            minute: dragPreview.startMinute,
+            startMinutes: preview.startMinutes,
+            hour: preview.startHour,
+            minute: preview.startMinute,
           }
-        : snapStartFromPosition(position || { hour: 0, minute: 0 }, customDragState.clickOffsetY);
+        : snapStartFromPosition(position || { hour: 0, minute: 0 }, drag.clickOffsetY);
 
       const startMinutes = snappedStart.startMinutes;
       const endTotalMinutes = startMinutes + duration;
@@ -1158,83 +1186,101 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
 
       const date = position ? days[position.colIdx] : days[0];
       const deadline = format(date, 'yyyy-MM-dd');
-      
-      if (customDragState.isFromSidebar) {
-        // Update existing task from sidebar (don't create new task)
-        if (onUpdateTask && task.id) {
-          onUpdateTask(task.id, {
-            deadline,
-            startTime: startTimeStr,
-            endTime: endTimeStr,
-          });
-        }
-      } else {
-        // Update existing task
-        if (onUpdateTask) {
-          onUpdateTask(task.id, {
-            deadline,
-            startTime: startTimeStr,
-            endTime: endTimeStr,
-          });
-        }
+
+      if (onUpdateTask && task.id) {
+        onUpdateTask(task.id, {
+          deadline,
+          startTime: startTimeStr,
+          endTime: endTimeStr,
+        });
       }
     }
-    
-    // Reset all states
-    setCustomDragState({
-      isActive: false,
-      startX: 0,
-      startY: 0,
-      currentX: 0,
-      currentY: 0,
-      taskData: null,
-      isFromSidebar: false,
-      isMovingExistingTask: false,
-      clickOffsetY: 0
-    });
+
+    customDragRef.current = INACTIVE_CUSTOM_DRAG;
+    dragPreviewRef.current = null;
+    setCustomDragState(INACTIVE_CUSTOM_DRAG);
     setDragPreview(null);
     setIsMovingTask(false);
     setMovedTaskId(null);
-    setActiveBlockKey(null); // Clear highlighting after drag
-  }, [customDragState.isActive, customDragState.taskData, customDragState.isFromSidebar, customDragState.clickOffsetY, dragPreview, calculatePosition, days, onUpdateTask]);
+  }, [calculatePosition, days, onUpdateTask]);
 
   const handleCustomDragLeave = useCallback((e) => {
-    if (!customDragState.isActive) return;
-    
-    // Only cancel if we're leaving the entire grid
+    if (!customDragRef.current.isActive) return;
+
     if (!e.currentTarget.contains(e.relatedTarget)) {
-      // Hide the preview when leaving the grid, but keep the drag state active
-      setDragPreview(null);
-      
-      // If we're moving a task and leaving the grid, keep the original task hidden
-      // The original task should remain hidden until we re-enter the grid
-      // (this is already handled by the shouldHide logic in the rendering)
-      
-      // Don't clear the custom drag state immediately - let it persist
-      // The drag state will be cleared in handleCustomDragEnd if the drop doesn't happen
+      setDragPreviewSynced(null);
     }
-  }, [customDragState.isActive, customDragState.isMovingExistingTask]);
+  }, [setDragPreviewSynced]);
 
   const handleCustomDragEnter = useCallback((e) => {
-    if (!customDragState.isActive) return;
-    
-    // Always restore the preview when entering the grid
-    if (customDragState.taskData) {
-      // Calculate position from current mouse position
-      const position = calculatePosition(e, getHoveredCalendarCell(e));
-      
-      if (position) {
-        const preview = calculateDragPreview(position, customDragState.taskData, customDragState.clickOffsetY);
-        setDragPreview(preview);
-      }
-      
-      // If we're moving an existing task, ensure the moving state is set
-      if (customDragState.isMovingExistingTask) {
-        setIsMovingTask(true);
-        setMovedTaskId(customDragState.taskData.id);
-      }
+    const drag = customDragRef.current;
+    if (!drag.isActive || !drag.taskData) return;
+
+    const position = calculatePosition(e, getHoveredCalendarCell(e));
+    if (position) {
+      setDragPreviewSynced(calculateDragPreview(position, drag.taskData, drag.clickOffsetY));
     }
-  }, [customDragState.isActive, customDragState.taskData, customDragState.clickOffsetY, customDragState.isMovingExistingTask, calculatePosition, calculateDragPreview, setIsMovingTask, setMovedTaskId]);
+
+    if (drag.isMovingExistingTask) {
+      setIsMovingTask(true);
+      setMovedTaskId(drag.taskData.id);
+    }
+  }, [calculatePosition, calculateDragPreview, setDragPreviewSynced]);
+
+  const armWeekBlockGesture = useCallback((e, block, blockKey) => {
+    stopWeekGestureRef.current?.();
+    const source = block._group ? block.tasks[0] : block;
+    const taskData = taskDataFromBlock(block);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const blockElement = e.currentTarget;
+    const clickOffsetY = blockElement?.getBoundingClientRect
+      ? e.clientY - blockElement.getBoundingClientRect().top
+      : 0;
+    let started = false;
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      if (stopWeekGestureRef.current === cleanup) stopWeekGestureRef.current = null;
+    };
+
+    const onMove = (moveEvent) => {
+      if (!started) {
+        if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < DRAG_ARM_THRESHOLD) return;
+        started = true;
+        setActiveBlockKey(blockKey);
+        if (!isCalendarHighlighted(highlightedItemRef.current, source) && onHighlightItemRef.current) {
+          if (window.globalDragState) window.globalDragState.suppressHighlightNavigation = true;
+          onHighlightItemRef.current({ id: source.id, type: source.type });
+        }
+        startCustomDrag(moveEvent, taskData, false, clickOffsetY);
+        return;
+      }
+      handleCustomDragMove(moveEvent);
+    };
+
+    const onUp = (upEvent) => {
+      cleanup();
+      if (!started) {
+        const highlighted = highlightedItemRef.current;
+        const wasHighlighted = isCalendarHighlighted(highlighted, source);
+        toggleCalendarHighlight(highlighted, onHighlightItemRef.current, source);
+        setActiveBlockKey((prev) => {
+          if (wasHighlighted && prev === blockKey) return null;
+          return blockKey;
+        });
+        return;
+      }
+      handleCustomDragEnd(upEvent);
+    };
+
+    stopWeekGestureRef.current = cleanup;
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  }, [startCustomDrag, handleCustomDragMove, handleCustomDragEnd]);
 
   // Global mouse event listener to detect sidebar drag start
   useEffect(() => {
@@ -1262,6 +1308,9 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     };
 
     const handleGlobalMouseUp = (e) => {
+      window.setTimeout(() => {
+        if (window.globalDragState) window.globalDragState.suppressClick = false;
+      }, 0);
       // Clear sidebar drag state if mouse is released outside calendar
       if (window.globalDragState.startCustomDrag) {
         const calendarGrid = document.querySelector('.calendar-grid');
@@ -1312,7 +1361,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
 
   return (
     <div
-      className={`calendar-grid ${isNavigating ? 'calendar-grid-transition' : ''}${condensedWeek ? ' calendar-grid--condensed' : ''}`}
+      className={`calendar-grid ${isNavigating ? 'calendar-grid-transition' : ''}${condensedWeek ? ' calendar-grid--condensed' : ''}${(dragState.isActive || customDragState.isActive) ? ' is-dragging' : ''}`}
       ref={gridRef}
       style={{
         position: 'relative',
@@ -1707,7 +1756,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
               return (
                 <div
                   key={blockKey}
-                  className={`calendar-time-block ${statusClass}${isShort ? ' short-block' : ''}${isHighlighted ? ' is-selected' : ''}`}
+                  className={`calendar-time-block ${statusClass}${isShort ? ' short-block' : ''}${isHighlighted ? ' is-selected' : ''}${shouldHide ? ' is-dragging' : ''}`}
                   style={{
                     position: 'absolute',
                     left,
@@ -1726,7 +1775,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                     justifyContent: 'flex-start',
                     alignItems: isShort ? 'center' : 'flex-start',
                     boxShadow: '0 2px 8px 0 rgba(0,0,0,0.15)',
-                    transition: 'all 0.2s ease',
+                    transition: (shouldHide || customDragState.isActive || dragState.isActive) ? 'none' : 'opacity 0.2s ease',
                     overflow: 'hidden',
                     fontSize: '0.85rem',
                     fontWeight: 600,
@@ -1761,72 +1810,46 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
 
                     e.preventDefault();
                     e.stopPropagation();
-                    
-                    toggleCalendarHighlight(
-                      highlightedItem,
-                      onHighlightItem,
-                      block._group ? block.tasks[0] : block
-                    );
+
+                    const source = block._group ? block.tasks[0] : block;
+
+                    if ((condensedWeek || tapToCreate) && e.pointerType && e.pointerType !== 'mouse') {
+                      if (!isCalendarHighlighted(highlightedItem, source)) {
+                        onHighlightItem?.({ id: source.id, type: source.type });
+                      }
+                      setActiveBlockKey(blockKey);
+                      const startX = e.clientX;
+                      const startY = e.clientY;
+                      const taskData = taskDataFromBlock(block);
+                      const timer = window.setTimeout(() => {
+                        startCustomDrag(e, taskData, false);
+                      }, 400);
+                      const cancel = (moveEvent) => {
+                        if (moveEvent.type === 'pointermove' && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 8) {
+                          return;
+                        }
+                        window.clearTimeout(timer);
+                        window.removeEventListener('pointermove', cancel);
+                        window.removeEventListener('pointerup', cancel);
+                        window.removeEventListener('pointercancel', cancel);
+                      };
+                      window.addEventListener('pointermove', cancel);
+                      window.addEventListener('pointerup', cancel);
+                      window.addEventListener('pointercancel', cancel);
+                      return;
+                    }
 
                     if (condensedWeek || tapToCreate) {
                       if (activeBlockKey === blockKey) {
-                        const editTask = block._group ? block.tasks[0] : block;
-                        if (onEdit) onEdit(editTask);
+                        if (onEdit) onEdit(source);
                       } else {
                         setActiveBlockKey(blockKey);
-                      }
-                      if (e.pointerType && e.pointerType !== 'mouse') {
-                        const startX = e.clientX;
-                        const startY = e.clientY;
-                        const taskData = {
-                          ...block,
-                          id: block._group ? block.tasks[0].id : block.id,
-                          title: block._group ? block.tasks[0].title : block.title,
-                          startTime: block._group ? block.tasks[0].startTime : block.startTime,
-                          endTime: block._group ? block.tasks[0].endTime : block.endTime,
-                          deadline: block._group ? block.tasks[0].deadline : block.deadline,
-                          taskType: block._group ? block.tasks[0].taskType : block.taskType,
-                          duration: block._group ? block.tasks[0].duration : block.duration,
-                          type: block._group ? block.tasks[0].type : block.type,
-                        };
-                        const timer = window.setTimeout(() => {
-                          startCustomDrag(e, taskData, false);
-                        }, 400);
-                        const cancel = (moveEvent) => {
-                          if (moveEvent.type === 'pointermove' && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 8) {
-                            return;
-                          }
-                          window.clearTimeout(timer);
-                          window.removeEventListener('pointermove', cancel);
-                          window.removeEventListener('pointerup', cancel);
-                          window.removeEventListener('pointercancel', cancel);
-                        };
-                        window.addEventListener('pointermove', cancel);
-                        window.addEventListener('pointerup', cancel);
-                        window.addEventListener('pointercancel', cancel);
+                        toggleCalendarHighlight(highlightedItem, onHighlightItem, source);
                       }
                       return;
                     }
-                    
-                    // Check if this block was already highlighted (second click)
-                    if (activeBlockKey === blockKey) {
-                      // Start custom drag for highlighted blocks (both tasks and events)
-                      const taskData = {
-                        ...block,
-                        id: block._group ? block.tasks[0].id : block.id,
-                        title: block._group ? block.tasks[0].title : block.title,
-                        startTime: block._group ? block.tasks[0].startTime : block.startTime,
-                        endTime: block._group ? block.tasks[0].endTime : block.endTime,
-                        deadline: block._group ? block.tasks[0].deadline : block.deadline,
-                        taskType: block._group ? block.tasks[0].taskType : block.taskType,
-                        duration: block._group ? block.tasks[0].duration : block.duration,
-                        type: block._group ? block.tasks[0].type : block.type, // Add type for events
-                      };
-                      startCustomDrag(e, taskData, false);
-                    } else {
-                      // First click - just highlight the block
-                      setActiveBlockKey(blockKey);
-                    }
+
+                    armWeekBlockGesture(e, block, blockKey);
                   }}
                                      onMouseEnter={e => {
                      // Show dropdown on hover

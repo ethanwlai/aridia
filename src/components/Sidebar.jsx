@@ -575,6 +575,10 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
                         }}
 
                         onClick={(e) => {
+                          if (window.globalDragState?.suppressClick) {
+                            window.globalDragState.suppressClick = false;
+                            return;
+                          }
                           // Don't trigger if clicking on buttons
                           if (e.target.closest('.task-delete-btn') || e.target.closest('.task-complete-btn') || e.target.closest('.task-edit-btn') || e.target.closest('.task-actions-dropdown-trigger')) {
                             return;

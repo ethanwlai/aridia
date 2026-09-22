@@ -17,7 +17,7 @@ import CreateSheet from './components/CreateSheet';
 import { useLayoutMode, getLayoutMode } from './hooks/useLayoutMode';
 import { useAuth } from './context/AuthContext';
 import { sortEventsByDeadline, sortTasks } from './utils/taskSorter';
-import { startOfDay } from './utils/calendarItems';
+import { isSameDate, startOfDay } from './utils/calendarItems';
 import {
   PENDING_AUTH_KEY,
   clearLocalTasks,
@@ -492,13 +492,17 @@ const App = () => {
     // If user clicks "No", do nothing (cancel auto-schedule)
   }, [tasks, updateTask]);
 
+  const centerDayRef = useRef(centerDay);
+  centerDayRef.current = centerDay;
+
   // Smooth navigation function with slide animation
   const smoothNavigateTo = useCallback((targetDate) => {
+    const next = startOfDay(targetDate);
+    if (isSameDate(centerDayRef.current, next)) return;
+
     setIsNavigating(true);
-    
-    // Use a smooth transition by setting the center day
-    setCenterDay(startOfDay(targetDate));
-    
+    setCenterDay(next);
+
     // Reset navigation state after transition completes
     setTimeout(() => {
       setIsNavigating(false);
@@ -784,6 +788,11 @@ const App = () => {
   
   useEffect(() => {
     if (highlightedItem) {
+      if (window.globalDragState?.suppressHighlightNavigation) {
+        window.globalDragState.suppressHighlightNavigation = false;
+        lastHighlightedItemIdRef.current = highlightedItem.id;
+        return;
+      }
       // Only auto-navigate if this is a new highlighted item (not a re-render)
       const isNewHighlight = lastHighlightedItemIdRef.current !== highlightedItem.id;
       
