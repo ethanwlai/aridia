@@ -724,9 +724,14 @@ html.layout-compact .day-view .calendar-nav-arrow {
   top: -32px;
 }
 
-/* Smooth transitions for calendar time blocks */
+/* Opacity-only so a drag can move blocks without animating position */
 .calendar-time-block {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.calendar-grid.is-dragging .calendar-time-block,
+.calendar-time-block.is-dragging {
+  transition: none;
 }
 
 /* Transparent highlight for overlapping calendar blocks */

@@ -157,6 +157,7 @@ const DayView = ({
         window.openDropdownRef.current = null;
       }
 
+      if (window.globalDragState) window.globalDragState.suppressClick = true;
       setAgendaDrag({
         item,
         startX,
@@ -199,6 +200,9 @@ const DayView = ({
         setAgendaDrag(null);
         return;
       }
+      window.setTimeout(() => {
+        if (window.globalDragState) window.globalDragState.suppressClick = false;
+      }, 0);
       requestAnimationFrame(() => {
         if (agendaDragRef.current?.active) {
           setAgendaDrag(null);

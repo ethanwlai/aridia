@@ -9,6 +9,7 @@ import {
   formatMinutes,
   formatShortTimeRange,
   getCalendarHighlightOpacity,
+  isCalendarHighlighted,
   getDayBlockHeightPx,
   getItemColor,
   getItemDurationMinutes,
@@ -17,6 +18,7 @@ import {
   isSameDate,
   parseTimeToMinutes,
   SHORT_BLOCK,
+  scrollHighlightedIntoView,
   snapMinutes,
   startOfDay,
   timeUpdatesForDrop,
@@ -30,6 +32,7 @@ const SCROLL_EDGE = 48;
 const SCROLL_BASE_SPEED = 14;
 const CREATE_DURATION_MINUTES = 30;
 const CREATE_DRAG_THRESHOLD = 6;
+const BLOCK_DRAG_THRESHOLD = 6;
 const CREATE_START_SNAP_MINUTES = 15;
 const CREATE_SNAP_MINUTES = 5;
 
@@ -109,6 +112,8 @@ export default function DayTimeline({
   onExternalDragEndRef.current = onExternalDragEnd;
   const onHighlightItemRef = useRef(onHighlightItem);
   onHighlightItemRef.current = onHighlightItem;
+  const highlightedItemRef = useRef(highlightedItem);
+  highlightedItemRef.current = highlightedItem;
   const onCreateAtRef = useRef(onCreateAt);
   onCreateAtRef.current = onCreateAt;
   const onCancelCreateRef = useRef(onCancelCreate);
@@ -179,10 +184,10 @@ export default function DayTimeline({
 
   useEffect(() => {
     if (!highlightedItem || !scrollRef.current) return;
+    const drag = dragStateRef.current;
+    if (drag?.source === 'block' || drag?.source === 'agenda') return;
     const id = String(highlightedItem.id).split(':')[0];
-    const el = scrollRef.current.querySelector(`[data-day-block-id="${id}"]`);
-    if (!el) return;
-    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    scrollHighlightedIntoView(scrollRef.current, `[data-day-block-id="${id}"]`);
     const match = timedItems.find((item) => String(item.id) === id);
     if (match) setActiveId(match.id);
   }, [highlightedItem, timedItems]);
@@ -256,7 +261,7 @@ export default function DayTimeline({
     }
   }, []);
 
-  const handleBlockMouseDown = (e, item) => {
+  const handleBlockMouseDown = (e, item, options = {}) => {
     if (
       e.target.closest('.task-complete-btn') ||
       e.target.closest('.task-delete-btn') ||
@@ -274,9 +279,7 @@ export default function DayTimeline({
       const startX = e.clientX;
       const startY = e.clientY;
       const target = e.currentTarget;
-      let started = false;
       const timer = window.setTimeout(() => {
-        started = true;
         handleBlockMouseDown({
           ...e,
           pointerType: 'mouse',
@@ -287,7 +290,7 @@ export default function DayTimeline({
           target: e.target,
           preventDefault() {},
           stopPropagation() {},
-        }, item);
+        }, item, { fromLongPress: true });
       }, 400);
       const cancel = (moveEvent) => {
         if (moveEvent.type === 'pointermove' && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 8) {
@@ -305,7 +308,9 @@ export default function DayTimeline({
       e.stopPropagation();
       closeCreate();
       setActiveId(item.id);
-      toggleCalendarHighlight(highlightedItem, onHighlightItem, item);
+      if (!isCalendarHighlighted(highlightedItem, item)) {
+        onHighlightItem?.({ id: item.id, type: item.type });
+      }
       return;
     }
 
@@ -314,7 +319,6 @@ export default function DayTimeline({
     abortAllDrags();
     closeCreate();
     setActiveId(item.id);
-    toggleCalendarHighlight(highlightedItem, onHighlightItem, item);
 
     if (window.openDropdownRef?.current) {
       window.openDropdownRef.current.setIsOpen(false);
@@ -326,6 +330,8 @@ export default function DayTimeline({
     if (!geo) return;
     const clickOffsetY = e.clientY - e.currentTarget.getBoundingClientRect().top;
     const dragId = item.id;
+    const originX = e.clientX;
+    const originY = e.clientY;
     const initial = {
       item,
       source: 'block',
@@ -334,13 +340,24 @@ export default function DayTimeline({
       previewStart: geo.start,
       moved: false,
       overGrid: true,
+      fromLongPress: Boolean(options.fromLongPress),
     };
     dragStateRef.current = initial;
     setDragState(initial);
 
+    const keepHighlightForDrag = () => {
+      if (isCalendarHighlighted(highlightedItemRef.current, item)) return;
+      if (window.globalDragState) window.globalDragState.suppressHighlightNavigation = true;
+      onHighlightItemRef.current?.({ id: item.id, type: item.type });
+    };
+
     const onMove = (moveEvent) => {
       const current = dragStateRef.current;
       if (!current || current.source !== 'block' || current.item?.id !== dragId) return;
+      if (!current.moved && Math.hypot(moveEvent.clientX - originX, moveEvent.clientY - originY) < BLOCK_DRAG_THRESHOLD) {
+        return;
+      }
+      if (!current.moved) keepHighlightForDrag();
       autoScrollAt(moveEvent.clientY);
       const minutes = yToMinutes(moveEvent.clientY - current.clickOffsetY);
       const next = {
@@ -360,24 +377,33 @@ export default function DayTimeline({
       if (!current || current.source !== 'block' || current.item?.id !== dragId) return;
       dragStateRef.current = null;
       setDragState(null);
-      if (current.moved) markJustDragged();
-      if (current.moved && current.item?.id != null) {
-        onUpdateTaskRef.current?.(
-          current.item.id,
-          timeUpdatesForDrop(
-            dayStartRef.current,
-            current.previewStart ?? 0,
-            getItemDurationMinutes(current.item)
-          )
-        );
+      if (current.moved) {
+        markJustDragged();
+        if (current.item?.id != null) {
+          onUpdateTaskRef.current?.(
+            current.item.id,
+            timeUpdatesForDrop(
+              dayStartRef.current,
+              current.previewStart ?? 0,
+              getItemDurationMinutes(current.item)
+            )
+          );
+        }
+        return;
       }
+      if (current.fromLongPress) return;
+      const wasHighlighted = isCalendarHighlighted(highlightedItemRef.current, item);
+      toggleCalendarHighlight(highlightedItemRef.current, onHighlightItemRef.current, item);
+      if (wasHighlighted) setActiveId(null);
     };
 
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
     stopBlockDragListenersRef.current = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
       stopBlockDragListenersRef.current = null;
     };
   };
@@ -544,7 +570,7 @@ export default function DayTimeline({
   }, [createSession, closeCreate]);
 
   return (
-    <div className={`day-timeline${dragState || createDrag?.active ? ' is-dragging' : ''}`}>
+    <div className={`day-timeline${(dragState?.moved || dragState?.source === 'agenda' || createDrag?.active) ? ' is-dragging' : ''}`}>
       <div
         className="day-timeline-scroll"
         ref={scrollRef}

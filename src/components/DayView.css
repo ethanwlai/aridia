@@ -151,6 +151,10 @@
   transition: none;
 }
 
+.day-timeline.is-dragging .day-time-block {
+  transition: none;
+}
+
 .day-time-block-preview {
   position: absolute;
   border-radius: 8px;
