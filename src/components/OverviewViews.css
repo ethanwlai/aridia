@@ -20,6 +20,7 @@
   overflow: hidden;
   position: relative;
   background: white;
+  container-type: inline-size;
 }
 
 .year-view {
