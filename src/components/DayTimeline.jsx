@@ -87,6 +87,7 @@ export default function DayTimeline({
   onCancelCreate,
   tapToCreate = false,
   longPressMove = false,
+  peekCreate = false,
   focusNowToken = 0,
 }) {
   const scrollRef = useRef(null);
@@ -540,6 +541,29 @@ export default function DayTimeline({
     abortAllDrags,
   ]);
 
+  useLayoutEffect(() => {
+    if (!peekCreate || !createSession || !scrollRef.current) return undefined;
+    const scrollEl = scrollRef.current;
+    const sheet = document.querySelector('.create-sheet.is-peek');
+    const sheetHeight = sheet?.getBoundingClientRect().height
+      || (window.visualViewport?.height ?? window.innerHeight) * 0.5;
+    const scrollRect = scrollEl.getBoundingClientRect();
+    const visibleBottom = Math.min(scrollRect.bottom, window.innerHeight - sheetHeight);
+    const visibleHeight = Math.max(40, visibleBottom - scrollRect.top);
+    const visibleEnd = Math.min(createSession.endMinutes, 24 * 60);
+    const duration = Math.max(CREATE_SNAP_MINUTES, visibleEnd - createSession.startMinutes);
+    const draftTop = (createSession.startMinutes / 60) * ROW_HEIGHT;
+    const draftHeight = getDayBlockHeightPx(duration, ROW_HEIGHT);
+    const draftCenter = draftTop + draftHeight / 2;
+    const maxScroll = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+    ignoreScrollRef.current = true;
+    scrollEl.scrollTop = Math.max(0, Math.min(maxScroll, draftCenter - visibleHeight / 2));
+    const id = requestAnimationFrame(() => {
+      ignoreScrollRef.current = false;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [peekCreate, createSession]);
+
   useEffect(() => {
     if (!createSession) return undefined;
 
@@ -551,6 +575,7 @@ export default function DayTimeline({
     };
 
     const handleMouseDown = (e) => {
+      if (e.target.closest('.create-sheet')) return;
       if (e.target.closest('.day-agenda')) return;
       if (document.querySelector('.aridia-datepicker-popper')?.contains(e.target)) return;
       if (document.querySelector('.taskform-datepicker-popper')?.contains(e.target)) return;
