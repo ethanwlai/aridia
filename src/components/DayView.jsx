@@ -252,7 +252,8 @@ const DayView = ({
           onExtendDuration={onExtendDuration}
           externalDragItem={isAgendaDragging ? agendaDrag.item : null}
           onExternalDragEnd={handleExternalDragEnd}
-          createSession={isCompact ? null : createSession}
+          createSession={createSession}
+          peekCreate={isCompact}
           onCreateAt={handleCreateAt}
           onCancelCreate={closeCreate}
           tapToCreate={isCompact || isCoarse}
@@ -280,7 +281,7 @@ const DayView = ({
         />
       </div>
       {isCompact && createSession && (
-        <CreateSheet open onClose={closeCreate}>
+        <CreateSheet open peek onClose={closeCreate}>
           <TaskForm
             variant="day"
             addTask={handleCreateAdd}
