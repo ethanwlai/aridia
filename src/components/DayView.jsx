@@ -253,7 +253,6 @@ const DayView = ({
           externalDragItem={isAgendaDragging ? agendaDrag.item : null}
           onExternalDragEnd={handleExternalDragEnd}
           createSession={createSession}
-          peekCreate={isCompact}
           onCreateAt={handleCreateAt}
           onCancelCreate={closeCreate}
           tapToCreate={isCompact || isCoarse}
