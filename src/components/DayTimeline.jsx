@@ -87,7 +87,6 @@ export default function DayTimeline({
   onCancelCreate,
   tapToCreate = false,
   longPressMove = false,
-  peekCreate = false,
   focusNowToken = 0,
 }) {
   const scrollRef = useRef(null);
@@ -215,10 +214,32 @@ export default function DayTimeline({
     }, 0);
   }, []);
 
+  const minutesFromTap = (clientY) => {
+    const column = dayColumnRef.current;
+    const scrollEl = scrollRef.current;
+    if (!column || !scrollEl) return null;
+    const viewportOffset = window.visualViewport?.offsetTop ?? 0;
+    const scrollRect = scrollEl.getBoundingClientRect();
+    const columnTopInContent = column.getBoundingClientRect().top - scrollRect.top + scrollEl.scrollTop;
+    const y = clientY + viewportOffset - scrollRect.top + scrollEl.scrollTop - columnTopInContent;
+    let start = snapMinutes((y / ROW_HEIGHT) * 60, CREATE_START_SNAP_MINUTES);
+    if (!Number.isFinite(start)) return null;
+    start = Math.max(0, Math.min(24 * 60, start));
+    if (start >= 24 * 60) start = 24 * 60 - CREATE_START_SNAP_MINUTES;
+    const end = Math.min(24 * 60, start + CREATE_DURATION_MINUTES);
+    return { start, end };
+  };
+
   const handleColumnClick = (e) => {
     if (e.target.closest('.day-time-block') || e.target.closest('.day-agenda')) return;
     if (justDraggedRef.current) {
       justDraggedRef.current = false;
+      return;
+    }
+    if (tapToCreate) {
+      const range = minutesFromTap(e.clientY);
+      if (!range) return;
+      onCreateAt?.(range.start, range.end);
       return;
     }
     const minutes = Math.max(0, Math.min(24 * 60 - CREATE_DURATION_MINUTES, yToMinutes(e.clientY)));
@@ -540,29 +561,6 @@ export default function DayTimeline({
     markJustDragged,
     abortAllDrags,
   ]);
-
-  useLayoutEffect(() => {
-    if (!peekCreate || !createSession || !scrollRef.current) return undefined;
-    const scrollEl = scrollRef.current;
-    const sheet = document.querySelector('.create-sheet.is-peek');
-    const sheetHeight = sheet?.getBoundingClientRect().height
-      || (window.visualViewport?.height ?? window.innerHeight) * 0.5;
-    const scrollRect = scrollEl.getBoundingClientRect();
-    const visibleBottom = Math.min(scrollRect.bottom, window.innerHeight - sheetHeight);
-    const visibleHeight = Math.max(40, visibleBottom - scrollRect.top);
-    const visibleEnd = Math.min(createSession.endMinutes, 24 * 60);
-    const duration = Math.max(CREATE_SNAP_MINUTES, visibleEnd - createSession.startMinutes);
-    const draftTop = (createSession.startMinutes / 60) * ROW_HEIGHT;
-    const draftHeight = getDayBlockHeightPx(duration, ROW_HEIGHT);
-    const draftCenter = draftTop + draftHeight / 2;
-    const maxScroll = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
-    ignoreScrollRef.current = true;
-    scrollEl.scrollTop = Math.max(0, Math.min(maxScroll, draftCenter - visibleHeight / 2));
-    const id = requestAnimationFrame(() => {
-      ignoreScrollRef.current = false;
-    });
-    return () => cancelAnimationFrame(id);
-  }, [peekCreate, createSession]);
 
   useEffect(() => {
     if (!createSession) return undefined;

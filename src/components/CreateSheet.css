@@ -55,6 +55,9 @@
 }
 
 .create-sheet.is-peek .taskform--day {
+  zoom: 0.9;
+  width: calc(100% / 0.9);
+  height: auto;
   background: #faf8ff;
   border-radius: 18px 18px 0 0;
 }
