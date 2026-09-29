@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './CreateSheet.css';
 
@@ -9,6 +9,7 @@ function sheetMaxHeight(peek) {
 }
 
 export default function CreateSheet({ open, onClose, children, peek = false }) {
+  const sheetRef = useRef(null);
   const [sheetMax, setSheetMax] = useState(() => (peek ? sheetMaxHeight(true) : '90dvh'));
 
   useEffect(() => {
@@ -37,6 +38,18 @@ export default function CreateSheet({ open, onClose, children, peek = false }) {
     };
   }, [open, onClose, peek]);
 
+  useLayoutEffect(() => {
+    if (!open || !peek) return;
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+    const title = sheet.querySelector('.taskform-day-title-text')?.textContent?.trim() || '';
+    if (!title.startsWith('Event')) return;
+    sheet.style.height = 'auto';
+    const max = Number.parseFloat(sheetMax);
+    const next = Number.isFinite(max) ? Math.min(sheet.scrollHeight, max) : sheet.scrollHeight;
+    sheet.style.height = `${next}px`;
+  }, [open, peek, sheetMax, children]);
+
   if (!open) return null;
 
   return createPortal(
@@ -46,6 +59,7 @@ export default function CreateSheet({ open, onClose, children, peek = false }) {
       role="presentation"
     >
       <div
+        ref={sheetRef}
         className={`create-sheet${peek ? ' is-peek' : ''}`}
         style={{ maxHeight: sheetMax }}
         onClick={(e) => e.stopPropagation()}

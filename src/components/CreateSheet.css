@@ -39,14 +39,18 @@
 .create-sheet-overlay.is-peek {
   background: transparent;
   pointer-events: none;
-  padding: 0;
+  padding: 0 max(12px, 5%);
+  padding-bottom: env(safe-area-inset-bottom);
   align-items: flex-end;
-  justify-content: stretch;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .create-sheet.is-peek {
   pointer-events: auto;
   width: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
   background: #faf8ff;
   border-radius: 18px 18px 0 0;
   box-shadow: 0 -8px 28px rgba(46, 0, 102, 0.16);
@@ -55,11 +59,53 @@
 }
 
 .create-sheet.is-peek .taskform--day {
-  zoom: 0.9;
-  width: calc(100% / 0.9);
+  width: 100%;
+  max-width: 100%;
   height: auto;
+  padding: 0.75rem 0.85rem 0.65rem !important;
+  box-sizing: border-box;
+  overflow: visible;
   background: #faf8ff;
   border-radius: 18px 18px 0 0;
+}
+
+.create-sheet.is-peek .taskform-day-title-text {
+  font-size: 0.9rem !important;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.create-sheet.is-peek .taskform--day label,
+.create-sheet.is-peek .taskform--day input,
+.create-sheet.is-peek .taskform--day select,
+.create-sheet.is-peek .taskform--day button {
+  font-size: 0.82rem !important;
+}
+
+.create-sheet.is-peek .taskform--day input:not([type="range"]),
+.create-sheet.is-peek .taskform--day select,
+.create-sheet.is-peek .taskform--day .pill-time {
+  padding: 0.55rem 0.65rem !important;
+  min-height: 40px;
+  height: auto;
+  box-sizing: border-box !important;
+}
+
+.create-sheet.is-peek .taskform--day input[type="text"] {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.create-sheet.is-peek .taskform-day-form,
+.create-sheet.is-peek .taskform-day-header,
+.create-sheet.is-peek .taskform-day-row {
+  gap: 0.5rem;
+}
+
+.create-sheet.is-peek .taskform-day-actions button {
+  min-height: 40px;
+  padding: 0.5rem 0.75rem !important;
+  box-sizing: border-box;
 }
 
 @keyframes create-sheet-peek-in {
