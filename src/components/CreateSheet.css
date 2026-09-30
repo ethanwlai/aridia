@@ -37,13 +37,18 @@
 }
 
 .create-sheet-overlay.is-peek {
-  background: transparent;
-  pointer-events: none;
+  background: rgba(20, 0, 40, 0.28);
+  pointer-events: auto;
   padding: 0 max(12px, 5%);
   padding-bottom: env(safe-area-inset-bottom);
   align-items: flex-end;
   justify-content: center;
   box-sizing: border-box;
+  animation: create-sheet-scrim-in 180ms ease-out;
+}
+
+.create-sheet-overlay.is-peek.is-closing {
+  animation: create-sheet-scrim-out 180ms ease-out forwards;
 }
 
 .create-sheet.is-peek {
@@ -108,9 +113,28 @@
   box-sizing: border-box;
 }
 
+.create-sheet.is-peek.is-closing {
+  animation: create-sheet-peek-out 180ms ease-out forwards;
+}
+
 @keyframes create-sheet-peek-in {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
+}
+
+@keyframes create-sheet-peek-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(100%); }
+}
+
+@keyframes create-sheet-scrim-in {
+  from { background-color: rgba(20, 0, 40, 0); }
+  to { background-color: rgba(20, 0, 40, 0.28); }
+}
+
+@keyframes create-sheet-scrim-out {
+  from { background-color: rgba(20, 0, 40, 0.28); }
+  to { background-color: rgba(20, 0, 40, 0); }
 }
 
 body.create-sheet-open {
