@@ -8,9 +8,18 @@ function sheetMaxHeight(peek) {
   return `${Math.max(180, height - 24)}px`;
 }
 
+const PEEK_FADE_MS = 180;
+
 export default function CreateSheet({ open, onClose, children, peek = false }) {
   const sheetRef = useRef(null);
+  const contentRef = useRef(null);
+  const shownRef = useRef(open);
+  const [phase, setPhase] = useState(open ? 'open' : 'closed');
   const [sheetMax, setSheetMax] = useState(() => (peek ? sheetMaxHeight(true) : '90dvh'));
+
+  if (children) contentRef.current = children;
+
+  const visible = peek ? (open || phase !== 'closed') : open;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -28,15 +37,38 @@ export default function CreateSheet({ open, onClose, children, peek = false }) {
       }
     };
     document.addEventListener('keydown', onKey);
-    document.body.classList.add('create-sheet-open');
+    if (!peek) document.body.classList.add('create-sheet-open');
 
     return () => {
       window.visualViewport?.removeEventListener('resize', update);
       window.removeEventListener('resize', update);
       document.removeEventListener('keydown', onKey);
-      document.body.classList.remove('create-sheet-open');
+      if (!peek) document.body.classList.remove('create-sheet-open');
     };
   }, [open, onClose, peek]);
+
+  useEffect(() => {
+    if (!peek) return undefined;
+    if (open) {
+      shownRef.current = true;
+      setPhase('open');
+      return undefined;
+    }
+    if (!shownRef.current) return undefined;
+    setPhase('closing');
+    const id = window.setTimeout(() => {
+      shownRef.current = false;
+      contentRef.current = null;
+      setPhase('closed');
+    }, PEEK_FADE_MS);
+    return () => window.clearTimeout(id);
+  }, [open, peek]);
+
+  useEffect(() => {
+    if (!peek || !visible) return undefined;
+    document.body.classList.add('create-sheet-open');
+    return () => document.body.classList.remove('create-sheet-open');
+  }, [peek, visible]);
 
   useLayoutEffect(() => {
     if (!open || !peek) return;
@@ -50,23 +82,32 @@ export default function CreateSheet({ open, onClose, children, peek = false }) {
     sheet.style.height = `${next}px`;
   }, [open, peek, sheetMax, children]);
 
-  if (!open) return null;
+  if (!visible) return null;
+
+  const overlayClass = `create-sheet-overlay${peek ? ' is-peek' : ''}${peek && phase === 'closing' ? ' is-closing' : ''}`;
+  const sheetClass = `create-sheet${peek ? ' is-peek' : ''}${peek && phase === 'closing' ? ' is-closing' : ''}`;
 
   return createPortal(
     <div
-      className={`create-sheet-overlay${peek ? ' is-peek' : ''}`}
-      onClick={peek ? undefined : onClose}
+      className={overlayClass}
+      onClick={() => {
+        if (window.__aridiaSuppressCreateDismiss) {
+          window.__aridiaSuppressCreateDismiss = false;
+          return;
+        }
+        onClose?.();
+      }}
       role="presentation"
     >
       <div
         ref={sheetRef}
-        className={`create-sheet${peek ? ' is-peek' : ''}`}
+        className={sheetClass}
         style={{ maxHeight: sheetMax }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal={peek ? 'false' : 'true'}
       >
-        {children}
+        {peek ? (open ? children : contentRef.current) : children}
       </div>
     </div>,
     document.body

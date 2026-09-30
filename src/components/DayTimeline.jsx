@@ -32,12 +32,14 @@ const SCROLL_EDGE = 48;
 const SCROLL_BASE_SPEED = 14;
 const CREATE_DURATION_MINUTES = 30;
 const CREATE_DRAG_THRESHOLD = 6;
+const CREATE_HOLD_MS = 400;
+const CREATE_HOLD_CANCEL_PX = 8;
 const BLOCK_DRAG_THRESHOLD = 6;
 const CREATE_START_SNAP_MINUTES = 15;
 const CREATE_SNAP_MINUTES = 5;
 
 function rangeFromCreateDrag(originMinutes, currentMinutes) {
-  const step = CREATE_SNAP_MINUTES;
+  const step = CREATE_START_SNAP_MINUTES;
   let start = Math.min(originMinutes, currentMinutes);
   let end = Math.max(originMinutes, currentMinutes);
   if (end - start < step) {
@@ -431,47 +433,85 @@ export default function DayTimeline({
   };
 
   const handleColumnMouseDown = (e) => {
-    if (tapToCreate) return;
-    if (e.button !== 0) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (e.target.closest('.day-time-block') || e.target.closest('.day-agenda')) return;
 
     abortAllDrags();
+    const isTouch = e.pointerType && e.pointerType !== 'mouse';
     const originMinutes = yToSnappedMinutes(e.clientY, CREATE_START_SNAP_MINUTES);
-    const initial = {
+    createDragRef.current = {
       originX: e.clientX,
       originY: e.clientY,
       originMinutes,
       currentMinutes: originMinutes,
       active: false,
+      armed: !isTouch,
+      abandoned: false,
     };
-    createDragRef.current = initial;
+
+    let holdTimer = 0;
+    if (isTouch) {
+      holdTimer = window.setTimeout(() => {
+        const current = createDragRef.current;
+        if (!current || current.abandoned) return;
+        createDragRef.current = { ...current, armed: true };
+      }, CREATE_HOLD_MS);
+    }
+
+    const stop = () => {
+      if (holdTimer) window.clearTimeout(holdTimer);
+      holdTimer = 0;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      stopCreateDragListenersRef.current = null;
+    };
+
+    const swallowFollowingClick = () => {
+      justDraggedRef.current = true;
+      window.setTimeout(() => {
+        justDraggedRef.current = false;
+      }, 400);
+    };
 
     const onMove = (moveEvent) => {
       const current = createDragRef.current;
-      if (!current) return;
-      autoScrollAt(moveEvent.clientY);
-      const dx = moveEvent.clientX - current.originX;
-      const dy = moveEvent.clientY - current.originY;
-      const active = current.active || Math.hypot(dx, dy) >= CREATE_DRAG_THRESHOLD;
-      if (!active) return;
+      if (!current || current.abandoned) return;
+      const dist = Math.hypot(moveEvent.clientX - current.originX, moveEvent.clientY - current.originY);
+      if (!current.armed) {
+        if (dist >= CREATE_HOLD_CANCEL_PX) {
+          createDragRef.current = { ...current, abandoned: true };
+          swallowFollowingClick();
+          stop();
+          createDragRef.current = null;
+        }
+        return;
+      }
       if (moveEvent.cancelable) moveEvent.preventDefault();
-      if (!current.active) onCancelCreateRef.current?.();
+      if (!current.active && dist < CREATE_DRAG_THRESHOLD) return;
+      autoScrollAt(moveEvent.clientY);
+      const currentMinutes = yToSnappedMinutes(moveEvent.clientY, CREATE_START_SNAP_MINUTES);
       const next = {
         ...current,
-        currentMinutes: yToSnappedMinutes(moveEvent.clientY, CREATE_SNAP_MINUTES),
+        currentMinutes,
         active: true,
+        armed: true,
       };
       createDragRef.current = next;
       setCreateDrag(next);
     };
 
     const onUp = (upEvent) => {
-      stopCreateDragListenersRef.current?.();
       const current = createDragRef.current;
+      stop();
       createDragRef.current = null;
       setCreateDrag(null);
-      if (!current?.active) return;
+      if (!current?.active || current.abandoned) return;
       markJustDragged();
+      window.__aridiaSuppressCreateDismiss = true;
+      window.setTimeout(() => {
+        window.__aridiaSuppressCreateDismiss = false;
+      }, 400);
       if (!isOverScrollArea(upEvent.clientX, upEvent.clientY)) return;
       const { startMinutes, endMinutes } = rangeFromCreateDrag(
         current.originMinutes,
@@ -480,13 +520,20 @@ export default function DayTimeline({
       onCreateAtRef.current?.(startMinutes, endMinutes);
     };
 
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    stopCreateDragListenersRef.current = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      stopCreateDragListenersRef.current = null;
+    const onCancel = (cancelEvent) => {
+      const current = createDragRef.current;
+      const moved = current
+        && Math.hypot(cancelEvent.clientX - current.originX, cancelEvent.clientY - current.originY) >= CREATE_HOLD_CANCEL_PX;
+      stop();
+      createDragRef.current = null;
+      setCreateDrag(null);
+      if (current?.active || (current && !current.armed && moved)) swallowFollowingClick();
     };
+
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+    stopCreateDragListenersRef.current = stop;
   };
 
   useEffect(() => () => {
@@ -573,6 +620,7 @@ export default function DayTimeline({
     };
 
     const handleMouseDown = (e) => {
+      if (e.target.closest('.create-sheet-overlay')) return;
       if (e.target.closest('.create-sheet')) return;
       if (e.target.closest('.day-agenda')) return;
       if (document.querySelector('.aridia-datepicker-popper')?.contains(e.target)) return;
@@ -615,7 +663,7 @@ export default function DayTimeline({
             className="day-timeline-daycol"
             ref={dayColumnRef}
             onClick={handleColumnClick}
-            onMouseDown={handleColumnMouseDown}
+            onPointerDown={handleColumnMouseDown}
           >
             {HOURS.map((hour) => (
               <div key={hour} className="day-timeline-slot" style={{ height: ROW_HEIGHT }} />
@@ -830,7 +878,7 @@ export default function DayTimeline({
       </div>
       <p className="day-timeline-hint">
         {tapToCreate
-          ? 'Tap an empty slot to create · Long-press a block to move'
+          ? 'Tap an empty slot to create · Hold, then drag, an empty slot · Long-press a block to move'
           : 'Click or drag an empty slot to create · Drag a block to schedule'}
       </p>
     </div>

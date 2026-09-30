@@ -279,8 +279,9 @@ const DayView = ({
           onTimesChange={handleCreateTimesChange}
         />
       </div>
-      {isCompact && createSession && (
-        <CreateSheet open peek onClose={closeCreate}>
+      {isCompact && (
+        <CreateSheet open={!!createSession} peek onClose={closeCreate}>
+          {createSession && (
           <TaskForm
             variant="day"
             addTask={handleCreateAdd}
@@ -290,6 +291,7 @@ const DayView = ({
             onTimesChange={handleCreateTimesChange}
             onCancel={closeCreate}
           />
+          )}
         </CreateSheet>
       )}
     </div>
