@@ -199,6 +199,31 @@ select {
   border: 1px solid #e1e1e1;
 }
 
+.taskform--day .creation-type-btn {
+  color: #2e0066;
+}
+
+.taskform--day .creation-type-btn:hover,
+.taskform--day .creation-type-btn:focus,
+.taskform--day .creation-type-btn:focus-visible,
+.taskform--day .creation-type-btn:active {
+  background: transparent;
+  color: #5f33b1;
+}
+
+.taskform--day .creation-type-btn.is-selected {
+  background: #2e0066;
+  color: #fff;
+}
+
+.taskform--day .creation-type-btn.is-selected:hover,
+.taskform--day .creation-type-btn.is-selected:focus,
+.taskform--day .creation-type-btn.is-selected:focus-visible,
+.taskform--day .creation-type-btn.is-selected:active {
+  background: #3d1a7a;
+  color: #fff;
+}
+
 /* Remove blinking carets from non-input elements */
 * {
   caret-color: transparent !important;

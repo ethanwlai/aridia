@@ -14,7 +14,19 @@ const HIDDEN_LOGO_LEFT_INSET = 12;
 const SEARCH_BAR_RIGHT_OFFSET = 24;
 // ═══════════════════════════════════════════════════════════════
 
-const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlightItem, sidebarWidth = 0, dashboardFullyOpen = false }) => {
+const CalendarHeader = ({
+  viewMode,
+  setViewMode,
+  tasks = [],
+  onSearch,
+  onHighlightItem,
+  sidebarWidth = 0,
+  dashboardFullyOpen = false,
+  compactChrome = false,
+  isCompact = false,
+  onOpenDrawer,
+  drawerOpen = false,
+}) => {
   const [visibleButtons, setVisibleButtons] = useState(4); // Start with all 4 buttons visible
   const [buttonStartIndex, setButtonStartIndex] = useState(0); // Start index for visible buttons
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,6 +44,7 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
     transform: 'translateY(-50%)'
   });
   const [searchBarWidth, setSearchBarWidth] = useState(240); // Track search bar width for dropdown
+  const [searchExpanded, setSearchExpanded] = useState(false);
   const [logoVisible, setLogoVisible] = useState(true);
   const headerRef = useRef();
   const searchInputRef = useRef();
@@ -278,6 +291,7 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
 
   // Check available space and adjust visible buttons and search bar width
   useEffect(() => {
+    if (compactChrome) return undefined;
     lastVisibleButtonsRef.current = 4;
     let lastHeaderWidth = 0; // Track the last header width to detect changes
     
@@ -532,14 +546,16 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
       }
       clearInterval(contentCheckInterval);
     };
-  }, [viewMode, sidebarWidth, dashboardFullyOpen]);
+  }, [viewMode, sidebarWidth, dashboardFullyOpen, compactChrome]);
 
-  // Sync dropdown width with search bar width
+  // Sync dropdown width with search bar width. On phones the panel is
+  // already full width, and a leftover pixel width can spill past it.
   useEffect(() => {
+    if (isCompact) return undefined;
     if (dropdownRef.current && searchBarWidth > 0) {
       dropdownRef.current.style.width = `${searchBarWidth}px`;
     }
-  }, [searchBarWidth, showDropdown]);
+  }, [searchBarWidth, showDropdown, isCompact]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -565,6 +581,130 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
   // Calculate the width of the button container based on visible buttons
   const buttonContainerWidth = visibleButtons * 70 + Math.max(0, (visibleButtons - 1) * 8); // Fixed button width + gaps
   
+  const searchDropdown = showDropdown && (suggestions.length > 0 || searchQuery.trim() === '') && (
+          <div
+            ref={dropdownRef}
+            className="calendar-search-dropdown"
+            style={{
+              position: 'absolute',
+              top: '100%',
+              right: '0',
+              width: compactChrome ? '100%' : `${searchBarWidth}px`,
+              background: 'white',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              zIndex: 10000,
+              opacity: 1,
+              marginTop: '4px',
+              transition: 'width 0.05s ease-out'
+            }}
+          >
+            {suggestions.map((suggestion, index) => (
+              <div
+                key={suggestion.id}
+                className="calendar-search-suggestion"
+                onClick={() => handleSuggestionClick(suggestion)}
+                style={{
+                  cursor: 'pointer',
+                  backgroundColor: selectedIndex === index ? '#f5f5f5' : 'white',
+                  borderBottom: index < suggestions.length - 1 ? '1px solid #eee' : 'none',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <span style={{
+                  color: suggestion.type === 'task' ? '#333' : '#666'
+                }}>
+                  {suggestion.text}
+                </span>
+              </div>
+            ))}
+          </div>
+  );
+
+  if (compactChrome) {
+    const headerClass = isCompact ? 'calendar-header calendar-header--compact' : 'calendar-header calendar-header--medium';
+    return (
+      <div className={headerClass} ref={headerRef}>
+        <button
+          type="button"
+          className={`calendar-menu-btn${drawerOpen ? ' is-open' : ''}`}
+          onClick={onOpenDrawer}
+          aria-label={drawerOpen ? 'Close agenda' : 'Open agenda'}
+          aria-expanded={drawerOpen}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+            <line x1="4" y1="7" x2="20" y2="7" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="17" x2="20" y2="17" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          ref={logoRef}
+          className="calendar-brand-logo"
+          onClick={requestShowLanding}
+          aria-label="Go to Aridia home"
+        >
+          <img src={aridiaLogo} alt="Aridia" width={LOGO_WIDTH} height={LOGO_HEIGHT} />
+        </button>
+        <div className="calendar-controls">
+          {buttons.map((button) => (
+            <button
+              key={button.key}
+              className={viewMode === button.key ? 'active' : ''}
+              onClick={() => setViewMode(button.key)}
+            >
+              {button.label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="calendar-search-toggle"
+          onClick={() => {
+            setSearchExpanded((open) => !open);
+            setShowDropdown(true);
+          }}
+          aria-label="Search"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <circle cx="11" cy="11" r="7" />
+            <line x1="16.5" y1="16.5" x2="21" y2="21" />
+          </svg>
+        </button>
+        {searchExpanded && (
+          <div className="calendar-search-panel" ref={searchContainerRef}>
+            <input
+              ref={searchInputRef}
+              className="calendar-search"
+              type="text"
+              placeholder="Search tasks..."
+              value={searchQuery}
+              onChange={handleInputChange}
+              onFocus={handleInputFocus}
+              onKeyDown={handleKeyDown}
+              autoFocus
+            />
+            <button
+              type="button"
+              className="calendar-search-toggle"
+              onClick={() => {
+                handleClearSearch();
+                setSearchExpanded(false);
+              }}
+              aria-label="Close search"
+            >
+              ×
+            </button>
+            {searchDropdown}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="calendar-header" ref={headerRef}>
       <button
@@ -687,50 +827,7 @@ const CalendarHeader = ({ viewMode, setViewMode, tasks = [], onSearch, onHighlig
         )}
 
 
-        {/* Dropdown */}
-        {showDropdown && (suggestions.length > 0 || searchQuery.trim() === '') && (
-          <div 
-            ref={dropdownRef}
-            style={{
-              position: 'absolute',
-              top: '100%',
-              right: '0',
-              width: `${searchBarWidth}px`,
-              maxHeight: '300px',
-              background: 'white',
-              border: '1px solid #ddd',
-              borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              zIndex: 10000,
-              opacity: 1,
-              marginTop: '4px',
-              overflow: 'hidden',
-              transition: 'width 0.05s ease-out'
-            }}
-          >
-            {suggestions.map((suggestion, index) => (
-              <div
-                key={suggestion.id}
-                onClick={() => handleSuggestionClick(suggestion)}
-                style={{
-                  padding: '12px 16px',
-                  cursor: 'pointer',
-                  backgroundColor: selectedIndex === index ? '#f5f5f5' : 'white',
-                  borderBottom: index < suggestions.length - 1 ? '1px solid #eee' : 'none',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}
-              >
-                <span style={{ 
-                  fontSize: '14px',
-                  color: suggestion.type === 'task' ? '#333' : '#666'
-                }}>
-                  {suggestion.text}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+        {searchDropdown}
       </div>
     </div>
   );
