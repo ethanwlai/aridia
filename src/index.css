@@ -325,6 +325,72 @@ html.layout-compact .frame-box {
   height: 40px;
 }
 
+.calendar-header--compact .calendar-search-panel {
+  top: 0.65rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  transform: none;
+  height: 36px;
+  max-height: 36px;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.calendar-header--compact .calendar-search-panel .calendar-search {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 36px;
+  max-height: 36px;
+  padding: 0 0.5rem;
+  font-size: 16px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-header--compact .calendar-search-panel .calendar-search-toggle {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.calendar-search-dropdown {
+  max-height: 300px;
+  overflow: hidden;
+}
+
+.calendar-search-suggestion {
+  padding: 12px 16px;
+  min-width: 0;
+}
+
+.calendar-search-suggestion span {
+  font-size: 14px;
+  min-width: 0;
+}
+
+.calendar-header--compact .calendar-search-dropdown {
+  max-height: min(40dvh, 220px);
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.calendar-header--compact .calendar-search-suggestion {
+  padding: 8px 10px;
+}
+
+.calendar-header--compact .calendar-search-suggestion span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .calendar-brand-logo {
   position: absolute;
   left: 32px;
@@ -1078,4 +1144,46 @@ html.layout-drawer .task-actions-dropdown-trigger {
 html.layout-compact .mcg-full .mcg-chip {
   height: 13px;
   font-size: 0.55rem;
+}
+
+/* Task/Event creation toggle — dark track */
+.creation-type-btn {
+  background: transparent;
+  color: #a084e8;
+  border: none;
+  border-radius: 999px;
+  padding: 0.2rem 0.5rem;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+  outline: none;
+  box-shadow: none;
+  caret-color: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.creation-type-btn:hover,
+.creation-type-btn:focus,
+.creation-type-btn:focus-visible,
+.creation-type-btn:active {
+  background: transparent;
+  color: #a259ff;
+  outline: none;
+  box-shadow: none;
+}
+
+.creation-type-btn.is-selected {
+  background: #a259ff;
+  color: #fff;
+}
+
+.creation-type-btn.is-selected:hover,
+.creation-type-btn.is-selected:focus,
+.creation-type-btn.is-selected:focus-visible,
+.creation-type-btn.is-selected:active {
+  background: #5f33b1;
+  color: #fff;
+  outline: none;
+  box-shadow: none;
 }

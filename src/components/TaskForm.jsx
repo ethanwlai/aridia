@@ -738,9 +738,6 @@ const TASKFORM_THEMES = {
     muted: '#a084e8',
     toggleBg: '#2e0066',
     toggleBorder: '#a084e8',
-    toggleSelectedBg: 'linear-gradient(135deg, #a084e8 0%, #8b5cf6 100%)',
-    toggleSelectedText: 'white',
-    toggleUnselectedText: '#a084e8',
     inputBg: '#2e0066',
     inputText: 'white',
     inputBorder: '#a084e8',
@@ -766,9 +763,6 @@ const TASKFORM_THEMES = {
     muted: '#2e0066',
     toggleBg: '#faf8ff',
     toggleBorder: '#e1e1e1',
-    toggleSelectedBg: '#2e0066',
-    toggleSelectedText: '#fff',
-    toggleUnselectedText: '#2e0066',
     inputBg: '#faf8ff',
     inputText: '#2e0066',
     inputBorder: '#e1e1e1',
@@ -1768,39 +1762,15 @@ const TaskForm = ({
             }}>
               <button
                 type="button"
+                className={`creation-type-btn${creationType === 'task' ? ' is-selected' : ''}`}
                 onClick={() => { setCreationType('task'); setShowTimePicker(false); }}
-                style={{
-                  background: creationType === 'task' ? ui.toggleSelectedBg : 'transparent',
-                  color: creationType === 'task' ? ui.toggleSelectedText : ui.toggleUnselectedText,
-                  border: 'none',
-                  borderRadius: '999px',
-                  padding: '0.2rem 0.5rem',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  outline: 'none',
-                  caretColor: 'transparent'
-                }}
               >
                 Task
               </button>
               <button
                 type="button"
+                className={`creation-type-btn${creationType === 'event' ? ' is-selected' : ''}`}
                 onClick={() => { setCreationType('event'); setShowTimePicker(false); }}
-                style={{
-                  background: creationType === 'event' ? ui.toggleSelectedBg : 'transparent',
-                  color: creationType === 'event' ? ui.toggleSelectedText : ui.toggleUnselectedText,
-                  border: 'none',
-                  borderRadius: '999px',
-                  padding: '0.2rem 0.5rem',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  outline: 'none',
-                  caretColor: 'transparent'
-                }}
               >
                 Event
               </button>

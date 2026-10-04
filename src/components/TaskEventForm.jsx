@@ -426,38 +426,14 @@ const TaskEventForm = ({ addTask, addEvent }) => {
         marginBottom: '1rem'
       }}>
         <button
+          className={`creation-type-btn${creationType === 'task' ? ' is-selected' : ''}`}
           onClick={() => { setCreationType('task'); setShowTimePicker(false); }}
-          style={{
-            background: creationType === 'task' ? 'linear-gradient(135deg, #a084e8 0%, #8b5cf6 100%)' : 'transparent',
-            color: creationType === 'task' ? 'white' : '#a084e8',
-            border: 'none',
-            borderRadius: '999px',
-            padding: '0.2rem 0.5rem',
-            fontSize: '12px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            outline: 'none',
-            caretColor: 'transparent'
-          }}
         >
           Task
         </button>
         <button
+          className={`creation-type-btn${creationType === 'event' ? ' is-selected' : ''}`}
           onClick={() => { setCreationType('event'); setShowTimePicker(false); }}
-          style={{
-            background: creationType === 'event' ? 'linear-gradient(135deg, #a084e8 0%, #8b5cf6 100%)' : 'transparent',
-            color: creationType === 'event' ? 'white' : '#a084e8',
-            border: 'none',
-            borderRadius: '999px',
-            padding: '0.2rem 0.5rem',
-            fontSize: '12px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            outline: 'none',
-            caretColor: 'transparent'
-          }}
         >
           Event
         </button>
