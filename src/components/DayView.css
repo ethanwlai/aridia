@@ -533,7 +533,8 @@
   padding: 24px;
 }
 
-body.day-agenda-create-open .calendar-header > div:has(> .calendar-search) {
+body.day-agenda-create-open .calendar-header > div:has(> .calendar-search),
+body.day-agenda-create-open .calendar-search-slot {
   z-index: 0 !important;
   pointer-events: none !important;
 }

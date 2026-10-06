@@ -220,6 +220,7 @@ html.layout-compact .frame-box {
   gap: 8px;
   padding: 0.65rem 0.75rem 0.75rem;
   align-items: center;
+  justify-content: flex-start;
 }
 
 .calendar-header--compact .calendar-brand-logo {
@@ -227,12 +228,24 @@ html.layout-compact .frame-box {
   transform: none;
   left: auto;
   top: auto;
+  flex-shrink: 0;
   opacity: 1 !important;
   pointer-events: auto !important;
 }
 
+.calendar-header--compact .calendar-header-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  flex: 1 1 100%;
+  width: 100%;
+  min-width: 0;
+}
+
 .calendar-header--compact .calendar-brand-logo img {
   height: 36px;
+  width: auto;
 }
 
 .calendar-header--compact .calendar-controls {
@@ -325,38 +338,64 @@ html.layout-compact .frame-box {
   height: 40px;
 }
 
-.calendar-header--compact .calendar-search-panel {
-  top: 0.65rem;
-  left: 0.75rem;
-  right: 0.75rem;
-  transform: none;
-  height: 36px;
-  max-height: 36px;
-  max-width: 100%;
-  overflow: visible;
+.calendar-header--compact .calendar-search-slot {
+  container-type: inline-size;
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  flex: 0 1 240px;
+  max-width: 240px;
+  min-width: 0;
+  z-index: 20;
 }
 
-.calendar-header--compact .calendar-search-panel .calendar-search {
+.calendar-header--compact .calendar-search-slot .calendar-search,
+.calendar-header--compact .calendar-search-slot .calendar-search:focus,
+.calendar-header--compact .calendar-search-clear {
+  --search-scale: 100cqi / 240px;
+}
+
+.calendar-header--compact .calendar-search-slot .calendar-search,
+.calendar-header--compact .calendar-search-slot .calendar-search:focus {
   flex: 1 1 auto;
-  width: 100%;
-  max-width: 100%;
+  width: 100% !important;
+  max-width: none;
   min-width: 0;
-  height: 36px;
-  max-height: 36px;
-  padding: 0 0.5rem;
-  font-size: 16px;
-  line-height: 1.2;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  height: calc(32px * var(--search-scale));
+  max-height: none;
+  box-sizing: border-box;
+  padding: 0 calc(0.6rem * var(--search-scale));
+  padding-right: calc((0.6rem + 20px) * var(--search-scale));
+  border-radius: calc(6px * var(--search-scale));
+  font-size: calc(0.85rem * var(--search-scale));
+  line-height: calc(30px * var(--search-scale));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: none;
 }
 
-.calendar-header--compact .calendar-search-panel .calendar-search-toggle {
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-  font-size: 18px;
+.calendar-header--compact .calendar-search-clear {
+  position: absolute;
+  right: calc(8px * var(--search-scale));
+  top: 50%;
+  transform: translateY(-50%);
+  width: calc(16px * var(--search-scale));
+  height: calc(16px * var(--search-scale));
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: #666;
+  font-size: calc(14px * var(--search-scale));
   line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 .calendar-search-dropdown {

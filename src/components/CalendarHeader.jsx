@@ -297,6 +297,15 @@ const CalendarHeader = ({
     
     const checkSpace = () => {
       if (!headerRef.current) return;
+      if (headerRef.current.classList.contains('calendar-header--compact')) {
+        const input = searchInputRef.current;
+        if (input) {
+          input.style.width = '';
+          input.style.opacity = '';
+          input.style.pointerEvents = '';
+        }
+        return;
+      }
       
              const headerWidth = headerRef.current.offsetWidth;
        const buttonWidth = 70; // Fixed width of each button
@@ -534,9 +543,10 @@ const CalendarHeader = ({
     }, 100);
     
     // Initial width setup
-    setTimeout(checkSpace, 0);
+    const initialCheck = setTimeout(checkSpace, 0);
     
     return () => {
+      clearTimeout(initialCheck);
       window.removeEventListener('resize', checkSpace);
       if (headerResizeObserver) {
         headerResizeObserver.disconnect();
@@ -548,8 +558,8 @@ const CalendarHeader = ({
     };
   }, [viewMode, sidebarWidth, dashboardFullyOpen, compactChrome]);
 
-  // Sync dropdown width with search bar width. On phones the panel is
-  // already full width, and a leftover pixel width can spill past it.
+  // Sync dropdown width with search bar width. On phones the dropdown
+  // matches the search slot in CSS, and a leftover pixel width can spill.
   useEffect(() => {
     if (isCompact) return undefined;
     if (dropdownRef.current && searchBarWidth > 0) {
@@ -625,41 +635,86 @@ const CalendarHeader = ({
 
   if (compactChrome) {
     const headerClass = isCompact ? 'calendar-header calendar-header--compact' : 'calendar-header calendar-header--medium';
+    const menuButton = (
+      <button
+        type="button"
+        className={`calendar-menu-btn${drawerOpen ? ' is-open' : ''}`}
+        onClick={onOpenDrawer}
+        aria-label={drawerOpen ? 'Close agenda' : 'Open agenda'}
+        aria-expanded={drawerOpen}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+          <line x1="4" y1="7" x2="20" y2="7" />
+          <line x1="4" y1="12" x2="20" y2="12" />
+          <line x1="4" y1="17" x2="20" y2="17" />
+        </svg>
+      </button>
+    );
+    const logoButton = (
+      <button
+        type="button"
+        ref={logoRef}
+        className="calendar-brand-logo"
+        onClick={requestShowLanding}
+        aria-label="Go to Aridia home"
+      >
+        <img src={aridiaLogo} alt="Aridia" width={LOGO_WIDTH} height={LOGO_HEIGHT} />
+      </button>
+    );
+    const viewControls = (
+      <div className="calendar-controls">
+        {buttons.map((button) => (
+          <button
+            key={button.key}
+            className={viewMode === button.key ? 'active' : ''}
+            onClick={() => setViewMode(button.key)}
+          >
+            {button.label}
+          </button>
+        ))}
+      </div>
+    );
+
+    if (isCompact) {
+      return (
+        <div className={headerClass} ref={headerRef}>
+          <div className="calendar-header-top">
+            {menuButton}
+            {logoButton}
+            <div className="calendar-search-slot" ref={searchContainerRef}>
+              <input
+                ref={searchInputRef}
+                className="calendar-search"
+                type="text"
+                placeholder="Search tasks..."
+                value={searchQuery}
+                onChange={handleInputChange}
+                onFocus={handleInputFocus}
+                onKeyDown={handleKeyDown}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="calendar-search-clear"
+                  onClick={handleClearSearch}
+                  aria-label="Clear search"
+                >
+                  ×
+                </button>
+              )}
+              {searchDropdown}
+            </div>
+          </div>
+          {viewControls}
+        </div>
+      );
+    }
+
     return (
       <div className={headerClass} ref={headerRef}>
-        <button
-          type="button"
-          className={`calendar-menu-btn${drawerOpen ? ' is-open' : ''}`}
-          onClick={onOpenDrawer}
-          aria-label={drawerOpen ? 'Close agenda' : 'Open agenda'}
-          aria-expanded={drawerOpen}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-            <line x1="4" y1="7" x2="20" y2="7" />
-            <line x1="4" y1="12" x2="20" y2="12" />
-            <line x1="4" y1="17" x2="20" y2="17" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          ref={logoRef}
-          className="calendar-brand-logo"
-          onClick={requestShowLanding}
-          aria-label="Go to Aridia home"
-        >
-          <img src={aridiaLogo} alt="Aridia" width={LOGO_WIDTH} height={LOGO_HEIGHT} />
-        </button>
-        <div className="calendar-controls">
-          {buttons.map((button) => (
-            <button
-              key={button.key}
-              className={viewMode === button.key ? 'active' : ''}
-              onClick={() => setViewMode(button.key)}
-            >
-              {button.label}
-            </button>
-          ))}
-        </div>
+        {menuButton}
+        {logoButton}
+        {viewControls}
         <button
           type="button"
           className="calendar-search-toggle"
