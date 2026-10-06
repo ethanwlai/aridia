@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef, useMemo, useCallback } from 'react';
 import styles from './Sidebar.module.css';
 import { format, isToday } from 'date-fns';
 import Header from './Header';
@@ -27,7 +27,7 @@ function isTaskCurrent(task) {
   return now >= start && now <= end;
 }
 
-const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick, highlightedItem, onHighlightItem, onAutoSchedule, onQuickMove, onExtendDuration, onEdit, allowCalendarDrag = true }) => {
+const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick, highlightedItem, onHighlightItem, onAutoSchedule, onQuickMove, onExtendDuration, onEdit, allowCalendarDrag = true, pinTodayToken = 0 }) => {
   // Weather state
   const [coords, setCoords] = useState(null);
   const [weather, setWeather] = useState({}); // { [dateStr]: { high, low, icon, description } }
@@ -367,6 +367,23 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
   // Auto-scroll sidebar to show current calendar days when navigation changes
   const sidebarContentRef = useRef(null);
   const hasSyncedCenterDayRef = useRef(false);
+  const suppressCenterScrollRef = useRef(0);
+
+  const scrollAgendaToToday = () => {
+    const container = sidebarContentRef.current;
+    if (!container) return;
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const el = container.querySelector(`[data-date="${todayStr}"]`);
+    if (!el) return;
+    const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+    container.scrollTop = top;
+  };
+
+  useLayoutEffect(() => {
+    if (!pinTodayToken) return;
+    scrollAgendaToToday();
+    suppressCenterScrollRef.current = pinTodayToken;
+  }, [pinTodayToken]);
   const prevDatesWithTasksRef = useRef(new Set());
 
   const expandDay = useCallback((dateStr) => {
@@ -404,6 +421,14 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
   }, [datesWithTasks]);
   
   useEffect(() => {
+    if (suppressCenterScrollRef.current) {
+      const token = suppressCenterScrollRef.current;
+      queueMicrotask(() => {
+        if (suppressCenterScrollRef.current === token) suppressCenterScrollRef.current = 0;
+      });
+      hasSyncedCenterDayRef.current = true;
+      return;
+    }
     if (highlightedItem) return;
     if (sidebarContentRef.current && centerDay) {
       // Calculate the leftmost day of the current calendar week (centerDay - 2)

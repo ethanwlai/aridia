@@ -1,5 +1,5 @@
 // src/App.jsx
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import CalendarHeader from './components/CalendarHeader';
 import Sidebar from './components/Sidebar';
 import CalendarGrid from './components/CalendarGrid';
@@ -105,6 +105,9 @@ const App = () => {
   const [motivation, setMotivation] = useState(3);
   const [viewMode, setViewMode] = useState(() => (getLayoutMode() === 'compact' ? 'day' : 'week'));
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerPresent, setDrawerPresent] = useState(false);
+  const [drawerShown, setDrawerShown] = useState(false);
+  const [pinTodayToken, setPinTodayToken] = useState(0);
   const [chevronHover, setChevronHover] = useState(false);
   const [selectedDashboardButton, setSelectedDashboardButton] = useState(null);
   const [chevronVisible, setChevronVisible] = useState(true);
@@ -515,18 +518,61 @@ const App = () => {
     setViewMode(mode);
   }, []);
 
+  const prefersReducedMotion = () =>
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const closeDrawer = useCallback(() => {
+    setDrawerOpen(false);
+    setDrawerShown(false);
+    if (prefersReducedMotion()) setDrawerPresent(false);
+  }, []);
+
+  const openDrawer = useCallback(() => {
+    setCenterDay(startOfDay(new Date()));
+    setFocusNowToken((n) => n + 1);
+    setPinTodayToken((n) => n + 1);
+    setDrawerPresent(true);
+    setDrawerOpen(true);
+    if (prefersReducedMotion()) setDrawerShown(true);
+  }, []);
+
+  const toggleDrawer = useCallback(() => {
+    if (drawerOpen) closeDrawer();
+    else openDrawer();
+  }, [drawerOpen, closeDrawer, openDrawer]);
+
   useEffect(() => {
-    if (!isDrawerChrome) setDrawerOpen(false);
+    if (!isDrawerChrome) {
+      setDrawerOpen(false);
+      setDrawerShown(false);
+      setDrawerPresent(false);
+    }
   }, [isDrawerChrome]);
+
+  useLayoutEffect(() => {
+    if (!isDrawerChrome || !drawerPresent || !drawerOpen || drawerShown) return undefined;
+    if (prefersReducedMotion()) {
+      setDrawerShown(true);
+      return undefined;
+    }
+    const id = requestAnimationFrame(() => setDrawerShown(true));
+    return () => cancelAnimationFrame(id);
+  }, [isDrawerChrome, drawerPresent, drawerOpen, drawerShown]);
+
+  useEffect(() => {
+    if (drawerOpen || !drawerPresent || !isDrawerChrome) return undefined;
+    const timeout = window.setTimeout(() => setDrawerPresent(false), 360);
+    return () => window.clearTimeout(timeout);
+  }, [drawerOpen, drawerPresent, isDrawerChrome]);
 
   useEffect(() => {
     if (!drawerOpen) return undefined;
     const onKey = (e) => {
-      if (e.key === 'Escape') setDrawerOpen(false);
+      if (e.key === 'Escape') closeDrawer();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [drawerOpen]);
+  }, [drawerOpen, closeDrawer]);
 
   const openDayView = useCallback((date) => {
     setPanelDate(null);
@@ -778,7 +824,7 @@ const App = () => {
       setHighlightedItem(null);
     } else {
       setHighlightedItem(item);
-      if (isDrawerChrome) setDrawerOpen(false);
+      if (isDrawerChrome) closeDrawer();
     }
   };
 
@@ -839,19 +885,15 @@ const App = () => {
   }, [isDrawerChrome, dragProgress]);
 
   const prevDragProgressRef = useRef(dragProgress);
-  const prevDrawerOpenRef = useRef(drawerOpen);
   useEffect(() => {
     const prevProgress = prevDragProgressRef.current;
-    const prevDrawer = prevDrawerOpenRef.current;
     const opened = prevProgress === 0 && dragProgress > 0;
     const closed = prevProgress > 0 && dragProgress === 0;
-    const drawerToggled = prevDrawer !== drawerOpen;
     prevDragProgressRef.current = dragProgress;
-    prevDrawerOpenRef.current = drawerOpen;
-    if (!opened && !closed && !drawerToggled) return;
+    if (!opened && !closed) return;
     setCenterDay(startOfDay(new Date()));
     setFocusNowToken((n) => n + 1);
-  }, [dragProgress, drawerOpen]);
+  }, [dragProgress]);
 
   // Calculate the available width for the main layout
   const [mainLayoutWidth, setMainLayoutWidth] = useState(window.innerWidth);
@@ -923,10 +965,10 @@ const App = () => {
             style={{ position: 'relative', display: 'flex', flexDirection: 'row', height: '100%', width: '100%', background: '#2e0066' }}
           >
             {/* Sidebar and dashboard area */}
-            {(isDrawerChrome ? drawerOpen : true) && (
+            {(isDrawerChrome ? drawerPresent : true) && (
             <div
-              className={isDrawerChrome ? 'app-drawer-overlay' : undefined}
-              onClick={isDrawerChrome ? () => setDrawerOpen(false) : undefined}
+              className={isDrawerChrome ? `app-drawer-overlay${drawerShown ? ' is-open' : ''}` : undefined}
+              onClick={isDrawerChrome ? closeDrawer : undefined}
               style={isDrawerChrome ? undefined : {
               width: sidebarBaseWidth + dashboardWidth,
               height: '100%',
@@ -939,6 +981,11 @@ const App = () => {
               <div
                 className={isDrawerChrome ? 'app-drawer' : undefined}
                 onClick={isDrawerChrome ? (e) => e.stopPropagation() : undefined}
+                onTransitionEnd={isDrawerChrome ? (event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.propertyName !== 'transform') return;
+                  if (!drawerOpen) setDrawerPresent(false);
+                } : undefined}
                 style={isDrawerChrome ? undefined : {
                   width: '100%',
                   height: '100%',
@@ -962,6 +1009,7 @@ const App = () => {
           onEdit={handleEditTask}
           searchResults={searchResults}
           allowCalendarDrag={!isDrawerChrome}
+          pinTodayToken={pinTodayToken}
         />
               {/* Dashboard panel with Aridia Classic */}
               <div
@@ -1362,7 +1410,7 @@ const App = () => {
                 onHighlightItem={setHighlightedItem}
                 compactChrome={isDrawerChrome}
                 isCompact={isCompact}
-                onOpenDrawer={() => setDrawerOpen((open) => !open)}
+                onOpenDrawer={toggleDrawer}
                 drawerOpen={drawerOpen}
               />
               {viewMode === 'week' && (
