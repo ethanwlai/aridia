@@ -581,6 +581,21 @@ const CalendarHeader = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // On phones, tapping outside the expanded search bar collapses it back to the icon.
+  // Query, results, and highlight stay so reopening shows the same text.
+  useEffect(() => {
+    if (!isCompact || !searchExpanded) return undefined;
+    const handlePointerDown = (event) => {
+      const container = searchContainerRef.current;
+      if (container && container.contains(event.target)) return;
+      setSearchExpanded(false);
+      setShowDropdown(false);
+      setSelectedIndex(-1);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [isCompact, searchExpanded]);
+
   const buttons = [
     { key: 'day', label: 'Day', disabled: false },
     { key: 'week', label: 'Week', disabled: false },
@@ -681,29 +696,45 @@ const CalendarHeader = ({
           <div className="calendar-header-top">
             {menuButton}
             {logoButton}
-            <div className="calendar-search-slot" ref={searchContainerRef}>
-              <input
-                ref={searchInputRef}
-                className="calendar-search"
-                type="text"
-                placeholder="Search tasks..."
-                value={searchQuery}
-                onChange={handleInputChange}
-                onFocus={handleInputFocus}
-                onKeyDown={handleKeyDown}
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  className="calendar-search-clear"
-                  onClick={handleClearSearch}
-                  aria-label="Clear search"
-                >
-                  ×
-                </button>
-              )}
-              {searchDropdown}
-            </div>
+            {searchExpanded ? (
+              <div className="calendar-search-slot" ref={searchContainerRef}>
+                <input
+                  ref={searchInputRef}
+                  className="calendar-search"
+                  type="text"
+                  placeholder="Search tasks..."
+                  value={searchQuery}
+                  onChange={handleInputChange}
+                  onFocus={handleInputFocus}
+                  onKeyDown={handleKeyDown}
+                  autoFocus
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className="calendar-search-clear"
+                    onClick={handleClearSearch}
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+                {searchDropdown}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="calendar-search-toggle"
+                onClick={() => setSearchExpanded(true)}
+                aria-label="Search"
+                aria-expanded={false}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <circle cx="11" cy="11" r="7" />
+                  <line x1="16.5" y1="16.5" x2="21" y2="21" />
+                </svg>
+              </button>
+            )}
           </div>
           {viewControls}
         </div>
