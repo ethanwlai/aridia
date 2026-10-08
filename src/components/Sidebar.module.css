@@ -1,7 +1,7 @@
 /* src/components/Sidebar.module.css */
 
 .sidebar {
-  width: 340px;
+  width: var(--sidebar-column-width, 340px);
   background: #2e0066;
   color: white;
   padding: 1.5rem;
