@@ -875,7 +875,9 @@ const App = () => {
   // Drag state for dashboard handle
   const dragHandleRef = useRef(null);
   const [dragProgress, setDragProgress] = useState(0); // 0 = closed, 1 = fully open
+  const [isDraggingDashboard, setIsDraggingDashboard] = useState(false);
   const sidebarBaseWidth = isDrawerChrome ? 0 : 360;
+  const SIDEBAR_COLUMN_WIDTH = 340; // matches .sidebar width
   const TIME_COL_WIDTH = 80; // px, matches CalendarGrid
 
   useEffect(() => {
@@ -918,10 +920,19 @@ const App = () => {
     ? 0
     : Math.max(0, mainLayoutWidth - 360 - TIME_COL_WIDTH - COMFORTABLE_COL_WIDTH);
   const dashboardWidth = isDrawerChrome ? 0 : dragProgress * dashboardMaxWidth;
+  const dashboardContentWidth = Math.max(0, dashboardMaxWidth + sidebarBaseWidth - SIDEBAR_COLUMN_WIDTH);
+  const chevronInset = 62 + dragProgress * (94 - 62);
+  const chevronLeft = sidebarBaseWidth + dashboardWidth - chevronInset;
+  const chevronOpacity = dragProgress > 0
+    ? (chevronVisible ? 1 : 0)
+    : (chevronHover ? 0.8 : 1);
 
-  // Drag event handlers (with snap)
+  // Drag event handlers (with snap). Transitions stay off while the pointer
+  // is down so the shell tracks 1:1; mouseup restores the ease for the snap.
   function handleDragStart(e) {
     if (isDrawerChrome) return;
+    dragHandleRef.current?.closest('.sidebar-shell')?.classList.add('is-dragging');
+    setIsDraggingDashboard(true);
     document.body.style.userSelect = 'none';
     window.addEventListener('mousemove', handleDrag);
     window.addEventListener('mouseup', handleDragEnd, { once: true });
@@ -941,6 +952,8 @@ const App = () => {
   function handleDragEnd() {
     document.body.style.userSelect = '';
     window.removeEventListener('mousemove', handleDrag);
+    dragHandleRef.current?.closest('.sidebar-shell')?.classList.remove('is-dragging');
+    setIsDraggingDashboard(false);
     // Snap dragProgress to 0 or 1 if close to ends
     setDragProgress(prev => {
       if (prev < 0.05) return 0;
@@ -967,16 +980,12 @@ const App = () => {
             {/* Sidebar and dashboard area */}
             {(isDrawerChrome ? drawerPresent : true) && (
             <div
-              className={isDrawerChrome ? `app-drawer-overlay${drawerShown ? ' is-open' : ''}` : undefined}
+              className={isDrawerChrome ? `app-drawer-overlay${drawerShown ? ' is-open' : ''}` : `sidebar-shell${isDraggingDashboard ? ' is-dragging' : ''}`}
               onClick={isDrawerChrome ? closeDrawer : undefined}
               style={isDrawerChrome ? undefined : {
-              width: sidebarBaseWidth + dashboardWidth,
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'row',
-              position: 'relative',
-              background: '#2e0066',
-            }}
+                width: sidebarBaseWidth + dashboardWidth,
+                '--dashboard-open-width': `${dashboardContentWidth}px`,
+              }}
             >
               <div
                 className={isDrawerChrome ? 'app-drawer' : undefined}
@@ -1014,31 +1023,39 @@ const App = () => {
               {/* Dashboard panel with Aridia Classic */}
               <div
                 className="dashboard-panel"
-                style={{
-                  width: isDrawerChrome ? '100%' : dashboardWidth,
+                style={isDrawerChrome ? {
+                  width: '100%',
                   minWidth: 0,
-                  maxWidth: isDrawerChrome ? 'none' : dashboardMaxWidth,
-                  height: isDrawerChrome ? undefined : '100%',
+                  maxWidth: 'none',
                   maxHeight: '100%',
                   background: '#2e0066',
                   color: 'white',
-                  transition: isDrawerChrome ? undefined : 'width 0.3s cubic-bezier(.4,0,.2,1)',
                   overflow: 'auto',
-                  display: isDrawerChrome ? 'flex' : 'flex',
+                  display: 'flex',
                   flexDirection: 'column',
-                  padding: isDrawerChrome || dashboardWidth > 40 ? '2rem 1.5rem' : '0',
-                  opacity: isDrawerChrome || dashboardWidth > 40 ? 1 : 0,
-                  pointerEvents: isDrawerChrome || dashboardWidth > 40 ? 'auto' : 'none',
+                  padding: '2rem 1.5rem',
+                  opacity: 1,
+                  pointerEvents: 'auto',
                   borderRight: 'none',
                   boxShadow: 'none',
                   borderRadius: '16px',
+                } : {
+                  pointerEvents: dragProgress > 0 ? 'auto' : 'none',
                 }}
                 onScroll={(e) => {
                   const scrollTop = e.target.scrollTop;
                   setChevronVisible(scrollTop < 10); // Hide chevron when scrolled more than 10px
                 }}
               >
-                <div style={{ width: '100%', minHeight: 'fit-content', flex: '1 1 auto' }}>
+                <div
+                  className={isDrawerChrome ? undefined : 'dashboard-panel-body'}
+                  style={isDrawerChrome
+                    ? { width: '100%', minHeight: 'fit-content', flex: '1 1 auto' }
+                    : {
+                        opacity: dragProgress,
+                        transform: `translateX(${(1 - dragProgress) * 12}px)`,
+                      }}
+                >
                   {/* Dashboard Header */}
                 <div style={{ 
                   display: 'flex', 
@@ -1303,90 +1320,34 @@ const App = () => {
               {/* Vertical drag line (full height, invisible but interactive) */}
               <div
                 ref={dragHandleRef}
+                className="dashboard-resize-handle"
                 onMouseDown={handleDragStart}
                 onDoubleClick={() => {
                   setDragProgress(prev => (prev < 1 ? 1 : 0));
                 }}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: sidebarBaseWidth + dashboardWidth, // no border needed
-                  width: 16, // make it easier to grab
-                  height: '100%',
-                  background: 'transparent',
-                  borderRadius: 2,
-                  zIndex: 25,
-                  cursor: 'ew-resize',
-                  transition: 'background 0.15s',
-                }}
+                style={{ left: sidebarBaseWidth + dashboardWidth }}
               />
-              {/* Dynamic chevron positioning */}
-              {dragProgress > 0.1 ? (
-                // Dashboard is open - chevron in header
-                <div
-                  onMouseDown={handleDragStart}
-                  onMouseEnter={() => setChevronHover(true)}
-                  onMouseLeave={() => setChevronHover(false)}
-                  onDoubleClick={() => {
-                    setDragProgress(prev => (prev < 1 ? 1 : 0));
-                  }}
-                  style={{
-                    position: 'absolute',
-                    top: '2rem',
-                    left: sidebarBaseWidth + dashboardWidth - 94,
-                    width: 32,
-                    height: 35,
-                    zIndex: 40,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'flex-start',
-                    cursor: 'ew-resize',
-                    background: 'transparent',
-                    transition: 'left 0.18s cubic-bezier(.4,1.2,.6,1), opacity 0.2s ease',
-                    opacity: chevronVisible ? 1 : 0,
-                    pointerEvents: chevronVisible ? 'auto' : 'none',
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="15 18 9 12 15 6" />
-                  </svg>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 6 15 12 9 18" />
-                  </svg>
-                </div>
-              ) : (
-                // Dashboard is closed - chevron in sidebar
-                <div
-                  onMouseDown={handleDragStart}
-                  onMouseEnter={() => setChevronHover(true)}
-                  onMouseLeave={() => setChevronHover(false)}
-                  onDoubleClick={() => {
-                    setDragProgress(prev => (prev < 1 ? 1 : 0));
-                  }}
-                  style={{
-                    position: 'absolute',
-                    top: '2rem',
-                    left: sidebarBaseWidth - 62,
-                    width: 32,
-                    height: 35,
-                    zIndex: 40,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'flex-start',
-                    cursor: 'ew-resize',
-                    background: 'transparent',
-                    transition: 'left 0.18s cubic-bezier(.4,1.2,.6,1)',
-                    opacity: chevronHover ? 0.8 : 1,
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="15 18 9 12 15 6" />
-                  </svg>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 6 15 12 9 18" />
-                  </svg>
-                </div>
-              )}
+              <div
+                className="dashboard-chevron"
+                onMouseDown={handleDragStart}
+                onMouseEnter={() => setChevronHover(true)}
+                onMouseLeave={() => setChevronHover(false)}
+                onDoubleClick={() => {
+                  setDragProgress(prev => (prev < 1 ? 1 : 0));
+                }}
+                style={{
+                  left: chevronLeft,
+                  opacity: chevronOpacity,
+                  pointerEvents: dragProgress > 0 && !chevronVisible ? 'none' : 'auto',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 6 15 12 9 18" />
+                </svg>
+              </div>
               </>
               )}
               </div>
