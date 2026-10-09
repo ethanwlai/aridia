@@ -78,6 +78,7 @@ html.hide-scrollbars *::-webkit-scrollbar-track {
 html.layout-drawer .frame-box {
   padding-left: max(8px, env(safe-area-inset-left));
   padding-right: max(8px, env(safe-area-inset-right));
+  touch-action: pan-y;
 }
 
 html.layout-compact .frame-box {
@@ -1150,6 +1151,7 @@ input[type="range"]::-moz-range-thumb {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border-top-right-radius: 23px;
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
   box-shadow: 8px 0 32px rgba(0, 0, 0, 0.35);
@@ -1159,6 +1161,20 @@ input[type="range"]::-moz-range-thumb {
 
 .app-drawer-overlay.is-open .app-drawer {
   transform: translateX(0);
+}
+
+.app-drawer-overlay,
+.app-drawer {
+  touch-action: pan-y;
+}
+
+.app-drawer-overlay.is-dragging {
+  pointer-events: auto;
+  transition: none;
+}
+
+.app-drawer-overlay.is-dragging .app-drawer {
+  transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

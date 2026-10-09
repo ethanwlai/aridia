@@ -15,6 +15,7 @@ import CalendarConflictModal from './components/CalendarConflictModal';
 import './components/CalendarConflictModal.css';
 import CreateSheet from './components/CreateSheet';
 import { useLayoutMode, getLayoutMode } from './hooks/useLayoutMode';
+import useDrawerEdgeSwipe from './hooks/useDrawerEdgeSwipe';
 import { useAuth } from './context/AuthContext';
 import { sortEventsByDeadline, sortTasks } from './utils/taskSorter';
 import { isSameDate, startOfDay } from './utils/calendarItems';
@@ -107,6 +108,8 @@ const App = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerPresent, setDrawerPresent] = useState(false);
   const [drawerShown, setDrawerShown] = useState(false);
+  const [drawerDragging, setDrawerDragging] = useState(false);
+  const drawerOverlayRef = useRef(null);
   const [pinTodayToken, setPinTodayToken] = useState(0);
   const [chevronHover, setChevronHover] = useState(false);
   const [selectedDashboardButton, setSelectedDashboardButton] = useState(null);
@@ -541,11 +544,43 @@ const App = () => {
     else openDrawer();
   }, [drawerOpen, closeDrawer, openDrawer]);
 
+  const suppressDrawerClickRef = useDrawerEdgeSwipe({
+    enabled: isDrawerChrome,
+    isOpen: drawerOpen,
+    drawerMounted: drawerPresent,
+    overlayRef: drawerOverlayRef,
+    onPreview: () => {
+      setDrawerDragging(true);
+      setDrawerPresent(true);
+    },
+    onCommitOpen: () => {
+      openDrawer();
+      setDrawerShown(true);
+      setDrawerDragging(false);
+    },
+    onCommitClose: () => {
+      setDrawerDragging(false);
+      closeDrawer();
+    },
+    onRevert: () => {
+      setDrawerDragging(false);
+    },
+  });
+
+  const handleDrawerOverlayClick = useCallback(() => {
+    if (suppressDrawerClickRef.current) {
+      suppressDrawerClickRef.current = false;
+      return;
+    }
+    closeDrawer();
+  }, [closeDrawer, suppressDrawerClickRef]);
+
   useEffect(() => {
     if (!isDrawerChrome) {
       setDrawerOpen(false);
       setDrawerShown(false);
       setDrawerPresent(false);
+      setDrawerDragging(false);
     }
   }, [isDrawerChrome]);
 
@@ -560,10 +595,10 @@ const App = () => {
   }, [isDrawerChrome, drawerPresent, drawerOpen, drawerShown]);
 
   useEffect(() => {
-    if (drawerOpen || !drawerPresent || !isDrawerChrome) return undefined;
+    if (drawerOpen || drawerDragging || !drawerPresent || !isDrawerChrome) return undefined;
     const timeout = window.setTimeout(() => setDrawerPresent(false), 360);
     return () => window.clearTimeout(timeout);
-  }, [drawerOpen, drawerPresent, isDrawerChrome]);
+  }, [drawerOpen, drawerDragging, drawerPresent, isDrawerChrome]);
 
   useEffect(() => {
     if (!drawerOpen) return undefined;
@@ -980,8 +1015,9 @@ const App = () => {
             {/* Sidebar and dashboard area */}
             {(isDrawerChrome ? drawerPresent : true) && (
             <div
-              className={isDrawerChrome ? `app-drawer-overlay${drawerShown ? ' is-open' : ''}` : `sidebar-shell${isDraggingDashboard ? ' is-dragging' : ''}`}
-              onClick={isDrawerChrome ? closeDrawer : undefined}
+              ref={isDrawerChrome ? drawerOverlayRef : undefined}
+              className={isDrawerChrome ? `app-drawer-overlay${drawerShown ? ' is-open' : ''}${drawerDragging ? ' is-dragging' : ''}` : `sidebar-shell${isDraggingDashboard ? ' is-dragging' : ''}`}
+              onClick={isDrawerChrome ? handleDrawerOverlayClick : undefined}
               style={isDrawerChrome ? undefined : {
                 width: sidebarBaseWidth + dashboardWidth,
                 '--dashboard-open-width': `${dashboardContentWidth}px`,
