@@ -2,6 +2,7 @@
 import '../index.css';
 import { startOfWeek, addDays, format, subDays, isSameDay, isBefore, isAfter, min as dateMin, max as dateMax } from 'date-fns';
 import TaskCreationCard from './TaskCreationCard';
+import TaskForm from './TaskForm';
 import TaskActionsDropdown from './TaskActionsDropdown';
 import ShortBlockLabel from './ShortBlockLabel';
 import StackedBlockLabel from './StackedBlockLabel';
@@ -24,6 +25,32 @@ const hours = Array.from({ length: 24 }, (_, i) => i);
 const ROW_HEIGHT = 50;
 const SNAP_MINUTES = 5;
 const DRAG_ARM_THRESHOLD = 6;
+const CREATE_HOLD_MS = 300;
+const CREATE_HOLD_CANCEL_PX = 10;
+const CREATE_START_SNAP_MINUTES = 15;
+const CREATE_DRAG_THRESHOLD = 6;
+
+function isVerticalScrollMove(dx, dy) {
+  return Math.abs(dy) >= CREATE_HOLD_CANCEL_PX && Math.abs(dy) >= Math.abs(dx);
+}
+
+function snapCreatePoint(minutes) {
+  const snapped = snapMinutes(minutes, CREATE_START_SNAP_MINUTES);
+  return Math.max(0, Math.min(24 * 60, snapped));
+}
+
+function rangeFromCreateDrag(originMinutes, currentMinutes) {
+  const step = CREATE_START_SNAP_MINUTES;
+  let start = Math.min(originMinutes, currentMinutes);
+  let end = Math.max(originMinutes, currentMinutes);
+  if (end - start < step) {
+    if (currentMinutes >= originMinutes) end = start + step;
+    else start = end - step;
+  }
+  start = Math.max(0, Math.min(24 * 60 - step, start));
+  end = Math.max(start + step, Math.min(24 * 60, end));
+  return { startMinutes: start, endMinutes: end };
+}
 const INACTIVE_CUSTOM_DRAG = {
   isActive: false,
   startX: 0,
@@ -123,6 +150,9 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   const days = Array.from({ length: 7 }, (_, i) => addDays(centerDay, i - 2));
   const [cardPos, setCardPos] = useState(null); // {x, y, flippedX, flippedY} or null
   const [cardKey, setCardKey] = useState(0); // Key to force component reset
+  const [createGesture, setCreateGesture] = useState(null);
+  const createGestureRef = useRef(null);
+  const swallowCreateClickRef = useRef(false);
   const cardRef = useRef();
   const [cardWidth, setCardWidth] = useState(0);
   const [cardHeight, setCardHeight] = useState(0);
@@ -211,6 +241,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       if (cardRef.current && cardRef.current.contains(e.target)) return;
       if (document.querySelector('.aridia-datepicker-popper')?.contains(e.target)) return;
       if (document.querySelector('.custom-time-picker-modal')?.contains(e.target)) return;
+      if (e.target.closest?.('.create-sheet') || e.target.closest?.('.create-sheet-overlay')) return;
       
       // Close any open time picker using the proper method
       if (closeTimePickerRef.current) {
@@ -289,9 +320,194 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   }
 
   // On grid single click - handle escape/clear functionality
+  function minutesFromClientY(clientY) {
+    const el = scrollWrapperRef.current;
+    if (!el) return 0;
+    const rect = el.getBoundingClientRect();
+    return ((clientY - rect.top + el.scrollTop) / ROW_HEIGHT) * 60;
+  }
+
+  function datesForRange(day, startMinutes, endMinutes) {
+    const start = new Date(day);
+    start.setHours(0, startMinutes, 0, 0);
+    const end = new Date(day);
+    end.setHours(0, endMinutes, 0, 0);
+    return { start, end };
+  }
+
+  function openCondensedCreate(colIdx, startMinutes, endMinutes) {
+    const day = days[colIdx];
+    if (!day) return;
+    const { start, end } = datesForRange(day, startMinutes, endMinutes);
+    setCardKey((prev) => prev + 1);
+    setCardPos({
+      condensed: true,
+      colIdx,
+      startMinutes,
+      endMinutes,
+      defaultStartTime: start,
+      defaultEndTime: end,
+      defaultDeadline: day,
+    });
+    if (document.activeElement) document.activeElement.blur();
+  }
+
+  function swallowCreateClick() {
+    swallowCreateClickRef.current = true;
+    window.setTimeout(() => {
+      swallowCreateClickRef.current = false;
+    }, 400);
+  }
+
+  function handleCreateTimesChange(start, end) {
+    if (!(start instanceof Date) || !(end instanceof Date) || isNaN(start.getTime()) || isNaN(end.getTime())) return;
+    const startMinutes = start.getHours() * 60 + start.getMinutes();
+    let endMinutes = end.getHours() * 60 + end.getMinutes();
+    if (endMinutes <= startMinutes) endMinutes += 24 * 60;
+    endMinutes = Math.min(24 * 60, endMinutes);
+    setCardPos((prev) => (prev?.condensed ? {
+      ...prev,
+      startMinutes,
+      endMinutes,
+      defaultStartTime: start,
+      defaultEndTime: end,
+    } : prev));
+  }
+
+  function handleCreatePointerDown(e) {
+    if (!condensedWeek || e.pointerType === 'mouse' || e.button !== 0) return;
+    if (e.target.closest('.calendar-time-block')) return;
+    const cell = e.target.closest('.calendar-cell');
+    if (!cell || cell.classList.contains('time-column')) return;
+    const colIdx = parseInt(cell.getAttribute('data-col'), 10);
+    if (isNaN(colIdx)) return;
+
+    const originMinutes = snapCreatePoint(minutesFromClientY(e.clientY));
+    const session = {
+      pointerId: e.pointerId,
+      originX: e.clientX,
+      originY: e.clientY,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      colIdx,
+      originMinutes,
+      currentMinutes: originMinutes,
+      armed: false,
+      active: false,
+      abandoned: false,
+    };
+    createGestureRef.current = session;
+
+    let holdTimer = 0;
+
+    function detach() {
+      window.clearTimeout(holdTimer);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      window.removeEventListener('touchmove', onTouchMove, true);
+    }
+
+    function onTouchMove(event) {
+      const current = createGestureRef.current;
+      if (!current?.armed || current.abandoned) return;
+      if (event.cancelable) event.preventDefault();
+    }
+
+    holdTimer = window.setTimeout(() => {
+      const current = createGestureRef.current;
+      if (!current || current.abandoned || current.armed) return;
+      const dx = current.lastX - current.originX;
+      const dy = current.lastY - current.originY;
+      if (isVerticalScrollMove(dx, dy)) {
+        current.abandoned = true;
+        createGestureRef.current = null;
+        swallowCreateClick();
+        detach();
+        return;
+      }
+      current.armed = true;
+      setCreateGesture({
+        colIdx: current.colIdx,
+        originMinutes: current.originMinutes,
+        currentMinutes: current.originMinutes,
+        armed: true,
+        active: false,
+      });
+    }, CREATE_HOLD_MS);
+
+    function samePointer(ev) {
+      return ev.pointerId == null || ev.pointerId === session.pointerId;
+    }
+
+    function onMove(ev) {
+      const current = createGestureRef.current;
+      if (!current || current.abandoned || !samePointer(ev)) return;
+      current.lastX = ev.clientX;
+      current.lastY = ev.clientY;
+      const dx = ev.clientX - current.originX;
+      const dy = ev.clientY - current.originY;
+      if (!current.armed) {
+        if (isVerticalScrollMove(dx, dy)) {
+          current.abandoned = true;
+          createGestureRef.current = null;
+          swallowCreateClick();
+          detach();
+        }
+        return;
+      }
+      if (ev.cancelable) ev.preventDefault();
+      const currentMinutes = snapCreatePoint(minutesFromClientY(ev.clientY));
+      current.currentMinutes = currentMinutes;
+      if (Math.hypot(dx, dy) >= CREATE_DRAG_THRESHOLD) current.active = true;
+      setCreateGesture({
+        colIdx: current.colIdx,
+        originMinutes: current.originMinutes,
+        currentMinutes,
+        armed: true,
+        active: current.active,
+      });
+    }
+
+    function finish(ev, cancelled) {
+      const current = createGestureRef.current;
+      if (current && !samePointer(ev)) return;
+      detach();
+      createGestureRef.current = null;
+      setCreateGesture(null);
+      if (!current || current.abandoned) return;
+      if (!current.armed) return;
+      swallowCreateClick();
+      if (cancelled) return;
+      const point = current.active
+        ? snapCreatePoint(minutesFromClientY(ev.clientY))
+        : current.originMinutes;
+      const range = rangeFromCreateDrag(current.originMinutes, point);
+      openCondensedCreate(current.colIdx, range.startMinutes, range.endMinutes);
+    }
+
+    function onUp(ev) {
+      finish(ev, false);
+    }
+
+    function onCancel(ev) {
+      finish(ev, true);
+    }
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+    window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+  }
+
   function handleGridSingleClick(e) {
     e.preventDefault();
     e.stopPropagation();
+
+    if (swallowCreateClickRef.current) {
+      swallowCreateClickRef.current = false;
+      return;
+    }
 
     if (cardPos) {
       setCardPos(null);
@@ -321,6 +537,13 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     const rowIdx = parseInt(cell.getAttribute('data-row'), 10);
     const colIdx = parseInt(cell.getAttribute('data-col'), 10);
     if (isNaN(rowIdx) || isNaN(colIdx)) return;
+
+    if (condensedWeek) {
+      const point = snapCreatePoint(minutesFromClientY(e.clientY));
+      const range = rangeFromCreateDrag(point, point);
+      openCondensedCreate(colIdx, range.startMinutes, range.endMinutes);
+      return;
+    }
 
     // Calculate snapped minute based on click position within the cell
     const cellRect = cell.getBoundingClientRect();
@@ -1421,6 +1644,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         onScroll={handleUserScroll}
         ref={scrollWrapperRef}
         onClick={handleGridSingleClick}
+        onPointerDown={handleCreatePointerDown}
         onDoubleClick={handleGridDoubleClick}
         onMouseMove={(e) => {
           handleGridMouseMove(e);
@@ -1498,6 +1722,54 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         />
 
 
+
+        {condensedWeek && (() => {
+          const gestureRange = createGesture?.armed
+            ? rangeFromCreateDrag(
+                createGesture.originMinutes,
+                createGesture.active ? createGesture.currentMinutes : createGesture.originMinutes
+              )
+            : null;
+          const range = gestureRange
+            ? { ...gestureRange, colIdx: createGesture.colIdx, primed: !createGesture.active }
+            : (cardPos?.condensed && cardPos.startMinutes != null
+              ? {
+                  startMinutes: cardPos.startMinutes,
+                  endMinutes: cardPos.endMinutes,
+                  colIdx: cardPos.colIdx,
+                  primed: false,
+                }
+              : null);
+          if (!range) return null;
+          const visibleIdx = range.colIdx - colStart;
+          if (visibleIdx < 0 || visibleIdx >= numDayCols) return null;
+          const grid = gridRef.current;
+          const colWidth = grid
+            ? (grid.getBoundingClientRect().width - TIME_COL_WIDTH) / numDayCols
+            : 40;
+          const { left, width } = getLanedBlockBounds(
+            TIME_COL_WIDTH + visibleIdx * colWidth,
+            colWidth,
+            0,
+            1
+          );
+          const top = (range.startMinutes / 60) * ROW_HEIGHT;
+          const height = Math.max(
+            ((Math.min(range.endMinutes, 24 * 60) - range.startMinutes) / 60) * ROW_HEIGHT,
+            SHORT_BLOCK.weekMinHeight
+          );
+          const endLabel = range.endMinutes >= 24 * 60 ? '00:00' : formatMinutes(range.endMinutes);
+          return (
+            <div
+              className={`day-time-block-draft${range.primed ? ' is-primed' : ''}${height < SHORT_BLOCK.weekInlineBelow ? ' is-short' : ''}`}
+              style={{ top, left, width, height }}
+            >
+              <div className="day-time-block-draft-time">
+                {formatShortTimeRange(formatMinutes(range.startMinutes), endLabel)}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Render time blocks for each task (absolutely positioned) */}
         {(() => {
@@ -1821,21 +2093,40 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                       const startX = e.clientX;
                       const startY = e.clientY;
                       const taskData = taskDataFromBlock(block);
+                      let started = false;
                       const timer = window.setTimeout(() => {
+                        started = true;
                         startCustomDrag(e, taskData, false);
                       }, 400);
-                      const cancel = (moveEvent) => {
-                        if (moveEvent.type === 'pointermove' && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 8) {
+                      const cleanup = () => {
+                        window.clearTimeout(timer);
+                        window.removeEventListener('pointermove', onMove);
+                        window.removeEventListener('pointerup', onUp);
+                        window.removeEventListener('pointercancel', onUp);
+                        window.removeEventListener('touchmove', onTouchMove, true);
+                      };
+                      const onTouchMove = (event) => {
+                        if (!started || !event.cancelable) return;
+                        event.preventDefault();
+                      };
+                      const onMove = (moveEvent) => {
+                        if (!started) {
+                          if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 8) return;
+                          cleanup();
                           return;
                         }
-                        window.clearTimeout(timer);
-                        window.removeEventListener('pointermove', cancel);
-                        window.removeEventListener('pointerup', cancel);
-                        window.removeEventListener('pointercancel', cancel);
+                        if (moveEvent.cancelable) moveEvent.preventDefault();
+                        handleCustomDragMove(moveEvent);
                       };
-                      window.addEventListener('pointermove', cancel);
-                      window.addEventListener('pointerup', cancel);
-                      window.addEventListener('pointercancel', cancel);
+                      const onUp = (upEvent) => {
+                        const wasStarted = started;
+                        cleanup();
+                        if (wasStarted) handleCustomDragEnd(upEvent);
+                      };
+                      window.addEventListener('pointermove', onMove);
+                      window.addEventListener('pointerup', onUp);
+                      window.addEventListener('pointercancel', onUp);
+                      window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
                       return;
                     }
 
@@ -2767,7 +3058,24 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       )}
 
       {/* Task creation card */}
-      {isDrawerChrome && cardPos ? (
+      {condensedWeek && cardPos?.condensed ? (
+        <CreateSheet open peek onClose={() => setCardPos(null)}>
+          <TaskForm
+            key={cardKey}
+            variant="day"
+            addTask={(task) => {
+              if (task?.startTime && task?.endTime && task.startTime === task.endTime) return;
+              if (onAdd) onAdd(task);
+              setCardPos(null);
+            }}
+            defaultStartTime={cardPos.defaultStartTime}
+            defaultEndTime={cardPos.defaultEndTime}
+            defaultDeadline={cardPos.defaultDeadline}
+            onTimesChange={handleCreateTimesChange}
+            onCancel={() => setCardPos(null)}
+          />
+        </CreateSheet>
+      ) : isDrawerChrome && cardPos ? (
         <CreateSheet open onClose={() => setCardPos(null)}>
           <TaskCreationCard
             key={cardKey}

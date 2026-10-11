@@ -857,6 +857,42 @@ html.layout-compact .frame-box {
   top: -32px;
 }
 
+/* Week-view create selection. Matches the day-view draft block. */
+.day-time-block-draft {
+  position: absolute;
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 3;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 6px 8px;
+  color: #a259ff;
+  background: transparent;
+  border: 2px solid #a259ff;
+  box-shadow: none;
+  opacity: 1;
+}
+
+.day-time-block-draft.is-primed {
+  opacity: 0.55;
+  background: rgba(162, 89, 255, 0.12);
+}
+
+.day-time-block-draft.is-short {
+  display: flex;
+  align-items: center;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.day-time-block-draft-time {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #a259ff;
+  opacity: 1;
+  white-space: nowrap;
+}
+
 /* Opacity-only so a drag can move blocks without animating position */
 .calendar-time-block {
   transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1175,6 +1211,7 @@ input[type="range"]::-moz-range-thumb {
 
 .app-drawer-overlay.is-dragging .app-drawer {
   transition: none;
+  will-change: transform;
 }
 
 @media (prefers-reduced-motion: reduce) {

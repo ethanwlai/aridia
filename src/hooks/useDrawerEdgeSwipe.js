@@ -30,8 +30,14 @@ function applyDrag(overlay, offset, width) {
   overlay.style.transition = 'none';
   drawer.style.transition = 'none';
   overlay.style.opacity = String(progress);
-  drawer.style.transform = `translateX(${offset - width}px)`;
+  drawer.style.transform = `translate3d(${offset - width}px, 0, 0)`;
   return true;
+}
+
+function eventElement(target) {
+  if (target instanceof Element) return target;
+  if (target?.parentElement instanceof Element) return target.parentElement;
+  return null;
 }
 
 function touchById(event, id) {
@@ -75,6 +81,11 @@ export default function useDrawerEdgeSwipe({
     const session = sessionRef.current;
     if (gestureActive) {
       if (session?.captured && session.pendingOffset != null) {
+        const drawer = overlayRef.current?.querySelector('.app-drawer');
+        if (drawer && drawer.offsetWidth > 0) {
+          session.width = drawer.offsetWidth;
+          session.pendingOffset = clampOffset(session.lastDx || 0, session.fromOpen, session.width);
+        }
         applyDrag(overlayRef.current, session.pendingOffset, session.width);
       }
       return;
@@ -97,9 +108,19 @@ export default function useDrawerEdgeSwipe({
   useEffect(() => {
     if (!enabled) return undefined;
 
-    const finish = (point, cancelled, event) => {
+    const releaseCapture = (session) => {
+      if (!session?.pointerCaptured) return;
+      try {
+        document.documentElement.releasePointerCapture(session.id);
+      } catch {
+        /* Pointer capture was already released. */
+      }
+    };
+
+    const finish = (id, clientX, cancelled, event) => {
       const session = sessionRef.current;
-      if (!session || !point || point.identifier !== session.id) return;
+      if (!session || id !== session.id) return;
+      releaseCapture(session);
       sessionRef.current = null;
 
       if (!session.captured) return;
@@ -107,7 +128,7 @@ export default function useDrawerEdgeSwipe({
       suppressOverlayClickRef.current = true;
       if (event?.cancelable) event.preventDefault();
 
-      const dx = point.clientX - session.startX;
+      const dx = clientX - session.startX;
       const width = session.width;
       const offset = clampOffset(Number.isFinite(dx) ? dx : 0, session.fromOpen, width);
       const progress = width > 0 ? offset / width : 0;
@@ -133,46 +154,41 @@ export default function useDrawerEdgeSwipe({
       }
     };
 
-    const onStart = (event) => {
-      if (sessionRef.current || event.touches.length !== 1) return;
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest(BLOCKED_START)) return;
+    const arm = (target, clientX, clientY, timeStamp, kind, id) => {
+      const element = eventElement(target);
+      if (!element || element.closest(BLOCKED_START)) return;
 
       const fromOpen = isOpenRef.current;
-      const onMenuButton = !fromOpen && Boolean(target.closest(MENU_BUTTON));
-      if (target.closest(INTERACTIVE) && !onMenuButton) return;
-
-      const point = event.touches[0];
+      const onMenuButton = !fromOpen && Boolean(element.closest(MENU_BUTTON));
+      if (element.closest(INTERACTIVE) && !onMenuButton) return;
       if (!fromOpen) {
-        if (!onMenuButton && point.clientX > EDGE_PX) return;
-      } else if (!overlayRef.current?.contains(target)) {
+        if (!onMenuButton && clientX > EDGE_PX) return;
+      } else if (!overlayRef.current?.contains(element)) {
         return;
       }
 
       suppressOverlayClickRef.current = false;
       sessionRef.current = {
-        id: point.identifier,
-        startX: point.clientX,
-        startY: point.clientY,
-        lastX: point.clientX,
-        lastT: event.timeStamp,
+        id,
+        kind,
+        startX: clientX,
+        startY: clientY,
+        lastX: clientX,
+        lastT: timeStamp,
+        lastDx: 0,
         velocity: 0,
         fromOpen,
         captured: false,
         previewed: false,
+        pointerCaptured: false,
         width: drawerWidth(overlayRef.current),
         pendingOffset: null,
       };
     };
 
-    const onMove = (event) => {
-      const session = sessionRef.current;
-      if (!session) return;
-      const point = touchById(event, session.id);
-      if (!point) return;
-      const dx = point.clientX - session.startX;
-      const dy = point.clientY - session.startY;
+    const track = (session, clientX, clientY, timeStamp) => {
+      const dx = clientX - session.startX;
+      const dy = clientY - session.startY;
 
       if (!session.captured) {
         if (Math.hypot(dx, dy) < SLOP_PX) return;
@@ -191,31 +207,89 @@ export default function useDrawerEdgeSwipe({
         }
       }
 
-      const dt = event.timeStamp - session.lastT;
+      const dt = timeStamp - session.lastT;
       if (dt > 0 && dt < 80) {
-        session.velocity = (point.clientX - session.lastX) / dt;
+        session.velocity = (clientX - session.lastX) / dt;
       }
-      session.lastX = point.clientX;
-      session.lastT = event.timeStamp;
+      session.lastX = clientX;
+      session.lastT = timeStamp;
+      session.lastDx = dx;
 
       if (!session.captured || prefersReducedMotion()) return;
-      if (event.cancelable) event.preventDefault();
-
       const offset = clampOffset(dx, session.fromOpen, session.width);
       session.pendingOffset = offset;
       applyDrag(overlayRef.current, offset, session.width);
     };
 
-    const onEnd = (event) => {
-      const session = sessionRef.current;
-      if (!session) return;
-      finish(touchById(event, session.id), false, event);
+    const onPointerDown = (event) => {
+      if (event.pointerType === 'mouse' || !event.isPrimary || sessionRef.current) return;
+      arm(event.target, event.clientX, event.clientY, event.timeStamp, 'pointer', event.pointerId);
     };
 
-    const onCancel = (event) => {
+    const onPointerMove = (event) => {
+      const session = sessionRef.current;
+      if (!session || session.kind !== 'pointer' || event.pointerId !== session.id) return;
+      track(session, event.clientX, event.clientY, event.timeStamp);
+      const current = sessionRef.current;
+      if (!current?.captured || current.pointerCaptured) return;
+      try {
+        document.documentElement.setPointerCapture(event.pointerId);
+        current.pointerCaptured = true;
+      } catch {
+        current.pointerCaptured = false;
+      }
+    };
+
+    const onPointerUp = (event) => {
+      const session = sessionRef.current;
+      if (!session || session.kind !== 'pointer' || event.pointerId !== session.id) return;
+      finish(session.id, event.clientX, false, event);
+    };
+
+    const onPointerCancel = (event) => {
+      const session = sessionRef.current;
+      if (!session || session.kind !== 'pointer' || event.pointerId !== session.id) return;
+      finish(session.id, event.clientX, true, event);
+    };
+
+    const onTouchStart = (event) => {
+      if (sessionRef.current || event.touches.length !== 1) return;
+      const point = event.touches[0];
+      arm(event.target, point.clientX, point.clientY, event.timeStamp, 'touch', point.identifier);
+    };
+
+    const onTouchMove = (event) => {
       const session = sessionRef.current;
       if (!session) return;
-      finish(touchById(event, session.id), true, event);
+      if (session.kind === 'pointer') {
+        if (!session.captured || !event.cancelable) return;
+        const point = event.touches[0];
+        if (!point) return;
+        const dx = point.clientX - session.startX;
+        const dy = point.clientY - session.startY;
+        if (Math.abs(dx) > Math.abs(dy)) event.preventDefault();
+        return;
+      }
+      const point = touchById(event, session.id);
+      if (!point) return;
+      track(session, point.clientX, point.clientY, event.timeStamp);
+      if (sessionRef.current?.captured && event.cancelable) event.preventDefault();
+    };
+
+    const onTouchEnd = (event) => {
+      const session = sessionRef.current;
+      if (!session || session.kind !== 'touch') return;
+      const point = touchById(event, session.id);
+      if (!point) return;
+      finish(session.id, point.clientX, false, event);
+    };
+
+    const onTouchCancel = (event) => {
+      const session = sessionRef.current;
+      if (!session || session.kind !== 'touch') return;
+      const point = touchById(event, session.id);
+      if (!point) return;
+      finish(session.id, point.clientX, true, event);
     };
 
     const onClickCapture = (event) => {
@@ -225,16 +299,24 @@ export default function useDrawerEdgeSwipe({
       event.stopPropagation();
     };
 
-    document.addEventListener('touchstart', onStart, { passive: true });
-    document.addEventListener('touchmove', onMove, { passive: false });
-    document.addEventListener('touchend', onEnd, { passive: false });
-    document.addEventListener('touchcancel', onCancel);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('pointermove', onPointerMove, true);
+    document.addEventListener('pointerup', onPointerUp, true);
+    document.addEventListener('pointercancel', onPointerCancel, true);
+    document.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
+    window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+    document.addEventListener('touchend', onTouchEnd);
+    document.addEventListener('touchcancel', onTouchCancel);
     document.addEventListener('click', onClickCapture, true);
     return () => {
-      document.removeEventListener('touchstart', onStart);
-      document.removeEventListener('touchmove', onMove);
-      document.removeEventListener('touchend', onEnd);
-      document.removeEventListener('touchcancel', onCancel);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('pointermove', onPointerMove, true);
+      document.removeEventListener('pointerup', onPointerUp, true);
+      document.removeEventListener('pointercancel', onPointerCancel, true);
+      document.removeEventListener('touchstart', onTouchStart, { capture: true });
+      window.removeEventListener('touchmove', onTouchMove, { capture: true });
+      document.removeEventListener('touchend', onTouchEnd);
+      document.removeEventListener('touchcancel', onTouchCancel);
       document.removeEventListener('click', onClickCapture, true);
     };
   }, [enabled, overlayRef]);
