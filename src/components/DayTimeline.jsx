@@ -32,11 +32,15 @@ const SCROLL_EDGE = 48;
 const SCROLL_BASE_SPEED = 14;
 const CREATE_DURATION_MINUTES = 30;
 const CREATE_DRAG_THRESHOLD = 6;
-const CREATE_HOLD_MS = 400;
-const CREATE_HOLD_CANCEL_PX = 8;
+const CREATE_HOLD_MS = 300;
+const CREATE_HOLD_CANCEL_PX = 10;
 const BLOCK_DRAG_THRESHOLD = 6;
 const CREATE_START_SNAP_MINUTES = 15;
 const CREATE_SNAP_MINUTES = 5;
+
+function isVerticalScrollMove(dx, dy) {
+  return Math.abs(dy) >= CREATE_HOLD_CANCEL_PX && Math.abs(dy) >= Math.abs(dx);
+}
 
 function rangeFromCreateDrag(originMinutes, currentMinutes) {
   const step = CREATE_START_SNAP_MINUTES;
@@ -104,7 +108,6 @@ export default function DayTimeline({
   const dragStateRef = useRef(null);
   dragStateRef.current = dragState;
   const createDragRef = useRef(null);
-  createDragRef.current = createDrag;
   const stopCreateDragListenersRef = useRef(null);
   const stopBlockDragListenersRef = useRef(null);
   const dayStartRef = useRef(null);
@@ -421,13 +424,20 @@ export default function DayTimeline({
       if (wasHighlighted) setActiveId(null);
     };
 
+    const onBlockTouchMove = (event) => {
+      if (event.cancelable) event.preventDefault();
+    };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
+    if (options.fromLongPress) {
+      window.addEventListener('touchmove', onBlockTouchMove, { capture: true, passive: false });
+    }
     stopBlockDragListenersRef.current = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener('touchmove', onBlockTouchMove, { capture: true });
       stopBlockDragListenersRef.current = null;
     };
   };
@@ -453,10 +463,26 @@ export default function DayTimeline({
     if (isTouch) {
       holdTimer = window.setTimeout(() => {
         const current = createDragRef.current;
-        if (!current || current.abandoned) return;
-        createDragRef.current = { ...current, armed: true };
+        if (!current || current.abandoned || current.armed) return;
+        const dx = (current.lastX ?? current.originX) - current.originX;
+        const dy = (current.lastY ?? current.originY) - current.originY;
+        if (isVerticalScrollMove(dx, dy)) {
+          createDragRef.current = null;
+          swallowFollowingClick();
+          stop();
+          return;
+        }
+        const armed = { ...current, armed: true, active: false };
+        createDragRef.current = armed;
+        setCreateDrag(armed);
       }, CREATE_HOLD_MS);
     }
+
+    const onTouchMove = (event) => {
+      const current = createDragRef.current;
+      if (!current?.armed || current.abandoned) return;
+      if (event.cancelable) event.preventDefault();
+    };
 
     const stop = () => {
       if (holdTimer) window.clearTimeout(holdTimer);
@@ -464,6 +490,7 @@ export default function DayTimeline({
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onCancel);
+      window.removeEventListener('touchmove', onTouchMove, { capture: true });
       stopCreateDragListenersRef.current = null;
     };
 
@@ -477,13 +504,20 @@ export default function DayTimeline({
     const onMove = (moveEvent) => {
       const current = createDragRef.current;
       if (!current || current.abandoned) return;
-      const dist = Math.hypot(moveEvent.clientX - current.originX, moveEvent.clientY - current.originY);
+      const dx = moveEvent.clientX - current.originX;
+      const dy = moveEvent.clientY - current.originY;
+      const dist = Math.hypot(dx, dy);
       if (!current.armed) {
-        if (dist >= CREATE_HOLD_CANCEL_PX) {
-          createDragRef.current = { ...current, abandoned: true };
+        createDragRef.current = {
+          ...current,
+          lastX: moveEvent.clientX,
+          lastY: moveEvent.clientY,
+        };
+        if (isVerticalScrollMove(dx, dy)) {
           swallowFollowingClick();
           stop();
           createDragRef.current = null;
+          setCreateDrag(null);
         }
         return;
       }
@@ -493,6 +527,8 @@ export default function DayTimeline({
       const currentMinutes = yToSnappedMinutes(moveEvent.clientY, CREATE_START_SNAP_MINUTES);
       const next = {
         ...current,
+        lastX: moveEvent.clientX,
+        lastY: moveEvent.clientY,
         currentMinutes,
         active: true,
         armed: true,
@@ -501,38 +537,48 @@ export default function DayTimeline({
       setCreateDrag(next);
     };
 
-    const onUp = (upEvent) => {
-      const current = createDragRef.current;
-      stop();
-      createDragRef.current = null;
-      setCreateDrag(null);
-      if (!current?.active || current.abandoned) return;
-      markJustDragged();
+    const openCreateRange = (upEvent, originMinutes, currentMinutes) => {
+      if (isTouch) swallowFollowingClick();
+      else markJustDragged();
       window.__aridiaSuppressCreateDismiss = true;
       window.setTimeout(() => {
         window.__aridiaSuppressCreateDismiss = false;
       }, 400);
       if (!isOverScrollArea(upEvent.clientX, upEvent.clientY)) return;
-      const { startMinutes, endMinutes } = rangeFromCreateDrag(
-        current.originMinutes,
-        current.currentMinutes
-      );
+      const { startMinutes, endMinutes } = rangeFromCreateDrag(originMinutes, currentMinutes);
       onCreateAtRef.current?.(startMinutes, endMinutes);
+    };
+
+    const onUp = (upEvent) => {
+      const current = createDragRef.current;
+      stop();
+      createDragRef.current = null;
+      setCreateDrag(null);
+      if (!current || current.abandoned) return;
+      if (current.active) {
+        openCreateRange(upEvent, current.originMinutes, current.currentMinutes);
+        return;
+      }
+      if (isTouch && current.armed) {
+        openCreateRange(upEvent, current.originMinutes, current.originMinutes);
+      }
     };
 
     const onCancel = (cancelEvent) => {
       const current = createDragRef.current;
-      const moved = current
-        && Math.hypot(cancelEvent.clientX - current.originX, cancelEvent.clientY - current.originY) >= CREATE_HOLD_CANCEL_PX;
+      const dx = current ? cancelEvent.clientX - current.originX : 0;
+      const dy = current ? cancelEvent.clientY - current.originY : 0;
+      const moved = current && (isVerticalScrollMove(dx, dy) || Math.hypot(dx, dy) >= CREATE_HOLD_CANCEL_PX);
       stop();
       createDragRef.current = null;
       setCreateDrag(null);
-      if (current?.active || (current && !current.armed && moved)) swallowFollowingClick();
+      if (current?.active || current?.armed || (current && !current.armed && moved)) swallowFollowingClick();
     };
 
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onCancel);
+    if (isTouch) window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
     stopCreateDragListenersRef.current = stop;
   };
 
@@ -808,11 +854,14 @@ export default function DayTimeline({
             })}
 
             {(() => {
+              const primed = Boolean(createDrag?.armed && !createDrag.active);
               const draftRange = createDrag?.active
                 ? rangeFromCreateDrag(createDrag.originMinutes, createDrag.currentMinutes)
-                : createSession
-                  ? { startMinutes: createSession.startMinutes, endMinutes: createSession.endMinutes }
-                  : null;
+                : primed
+                  ? rangeFromCreateDrag(createDrag.originMinutes, createDrag.originMinutes)
+                  : createSession
+                    ? { startMinutes: createSession.startMinutes, endMinutes: createSession.endMinutes }
+                    : null;
               if (!draftRange) return null;
               const visibleEnd = Math.min(draftRange.endMinutes, 24 * 60);
               const duration = Math.max(CREATE_SNAP_MINUTES, visibleEnd - draftRange.startMinutes);
@@ -829,7 +878,7 @@ export default function DayTimeline({
                 : formatMinutes(draftRange.endMinutes);
               return (
                 <div
-                  className={`day-time-block-draft${height < SHORT_BLOCK.dayInlineBelow ? ' is-short' : ''}`}
+                  className={`day-time-block-draft${primed ? ' is-primed' : ''}${height < SHORT_BLOCK.dayInlineBelow ? ' is-short' : ''}`}
                   style={{ top, left, width, height }}
                 >
                   <div className="day-time-block-draft-time">

@@ -183,6 +183,11 @@
   opacity: 1;
 }
 
+.day-time-block-draft.is-primed {
+  opacity: 0.55;
+  background: rgba(162, 89, 255, 0.12);
+}
+
 .day-time-block-draft.is-short {
   display: flex;
   align-items: center;
