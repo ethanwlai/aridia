@@ -2542,11 +2542,6 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                                   ? `${block.tasks[0].startTime} - ${block.tasks[0].endTime}`
                                   : ''
                               }
-                              titleStyle={{
-                                whiteSpace: 'nowrap',
-                                textOverflow: 'ellipsis',
-                                wordBreak: 'normal',
-                              }}
                             />
                             )}
                             {isShort && (
@@ -2710,9 +2705,6 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                               titleStyle={{
                                 borderTop: i !== 0 ? '1px solid #ffffff33' : 'none',
                                 paddingTop: i !== 0 ? 2 : 0,
-                                whiteSpace: 'nowrap',
-                                textOverflow: 'ellipsis',
-                                wordBreak: 'normal',
                               }}
                             />
                           ))}
@@ -2747,11 +2739,6 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                                 ? `${block.startTime} - ${block.endTime}`
                                 : ''
                             }
-                            titleStyle={{
-                              whiteSpace: 'nowrap',
-                              textOverflow: 'ellipsis',
-                              wordBreak: 'normal',
-                            }}
                           />
                           )}
                         {isShort && (
@@ -2913,6 +2900,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
 
       {dragPreview && (dragState.isActive || customDragState.isActive) && (
         <div
+          className="calendar-drag-preview"
           style={{
             position: 'absolute',
             left: dragPreview.left,
@@ -2929,13 +2917,14 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
             display: 'flex',
             flexDirection: 'column',
             justifyContent: dragPreview.isShortBlock ? 'center' : 'flex-start',
-            alignItems: 'flex-start',
+            alignItems: 'stretch',
             boxShadow: '0 2px 8px 0 rgba(0,0,0,0.15)',
             fontSize: '0.85rem',
             fontWeight: 600,
             lineHeight: 1.2,
             userSelect: 'none',
             caretColor: 'transparent',
+            overflow: 'hidden',
             // CSS optimizations for smoother rendering
             willChange: 'transform, left, top',
             transform: 'translateZ(0)', // Force hardware acceleration
@@ -2943,34 +2932,10 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
             perspective: 1000,
           }}
         >
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2,
-            alignItems: 'flex-start',
-            justifyContent: dragPreview.isShortBlock ? 'center' : 'flex-start',
-            width: '100%',
-            height: dragPreview.isShortBlock ? '100%' : 'auto'
-          }}>
-            <div style={{
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              lineHeight: 1.2,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}>
-              {customDragState.taskData?.title || dragTaskRef.current?.title || 'Task'}
-            </div>
-            {(
-              <div style={{
-                fontSize: '0.75rem',
-                fontWeight: 500,
-                lineHeight: 1.1,
-                opacity: 0.9,
-                marginTop: '2px',
-              }}>
-            {(() => {
+          <StackedBlockLabel
+            blockSelector=".calendar-drag-preview"
+            title={customDragState.taskData?.title || dragTaskRef.current?.title || 'Task'}
+            timeText={(() => {
               if (dragPreview && customDragState.isActive && typeof dragPreview.startMinutes === 'number') {
                 const duration = typeof dragPreview.duration === 'number'
                   ? dragPreview.duration
@@ -2984,9 +2949,9 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
               }
               return '';
             })()}
-            </div>
-            )}
-          </div>
+            titleStyle={{ fontSize: '0.85rem', fontWeight: 600, lineHeight: 1.2 }}
+            timeStyle={{ fontSize: '0.75rem', fontWeight: 500, lineHeight: 1.1, opacity: 0.9 }}
+          />
         </div>
       )}
 

@@ -216,7 +216,8 @@
   font-size: 0.75rem;
   font-weight: 500;
   opacity: 0.95;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .day-time-block-title {
@@ -224,9 +225,9 @@
   font-weight: 600;
   line-height: 1.2;
   padding-right: 72px;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .day-time-block.is-short {
