@@ -913,12 +913,15 @@ export default function DayTimeline({
                     background: getItemColor(dragState.item),
                   }}
                 >
-                  <div className="day-time-block-preview-label">
-                    <div className="day-time-block-title">{getItemTitle(dragState.item)}</div>
-                    <div className="day-time-block-preview-time">
-                      {formatShortTimeRange(dropTimes.startTime, dropTimes.endTime)}
-                    </div>
-                  </div>
+                  <StackedBlockLabel
+                    blockSelector=".day-time-block-preview"
+                    titleClassName="day-time-block-title"
+                    timeClassName="day-time-block-preview-time"
+                    title={getItemTitle(dragState.item)}
+                    timeText={formatShortTimeRange(dropTimes.startTime, dropTimes.endTime)}
+                    titleStyle={{ paddingRight: 0, fontSize: '0.85rem', fontWeight: 600, lineHeight: 1.2 }}
+                    timeStyle={{ fontSize: '0.75rem', fontWeight: 500, opacity: 0.95 }}
+                  />
                 </div>
               );
             })()}

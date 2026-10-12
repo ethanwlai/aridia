@@ -1,9 +1,35 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { availableTextWidth, findWeekBlock } from '../utils/blockTextGutter';
+import {
+  blockContentBottom,
+  countWrappedLines,
+  lineClampStyle,
+  linesThatFit,
+  readLineHeight,
+} from '../utils/blockTextClamp';
+
+const STACK_GAP = 2;
+
+/**
+ * Space this label may use inside its block.
+ * Several labels in one block split the content box evenly.
+ */
+function labelBudget(block, titleEl) {
+  const fromTitle = blockContentBottom(block) - titleEl.getBoundingClientRect().top;
+  const labels = block.querySelectorAll('.stacked-block-label');
+  if (labels.length <= 1) return Math.max(0, fromTitle);
+  const cs = getComputedStyle(block);
+  const padTop = parseFloat(cs.paddingTop) || 0;
+  const padBottom = parseFloat(cs.paddingBottom) || 0;
+  const share = (block.clientHeight - padTop - padBottom) / labels.length;
+  return Math.max(0, Math.min(fromTitle, share));
+}
 
 /**
  * Stacked title + optional time for taller calendar blocks.
- * Hides the time range entirely when it would be vertically clipped.
+ * Title wraps to the block width. An ellipsis appears only when the
+ * wrapped text is taller than the block. The time line is hidden when
+ * there is not a full line left under the title.
  */
 export default function StackedBlockLabel({
   title,
@@ -21,6 +47,8 @@ export default function StackedBlockLabel({
   const [showTime, setShowTime] = useState(Boolean(timeText));
   const [titleMaxWidth, setTitleMaxWidth] = useState(null);
   const [timeMaxWidth, setTimeMaxWidth] = useState(null);
+  const [titleLines, setTitleLines] = useState(1);
+  const [timeLines, setTimeLines] = useState(1);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -36,29 +64,32 @@ export default function StackedBlockLabel({
       setTimeMaxWidth((prev) => (prev === nextTime ? prev : nextTime));
     };
 
-    if (!timeText) {
-      setShowTime(false);
-      applyGutters();
-    }
-
     const measure = () => {
       applyGutters();
-      if (!timeText) return;
-
       const block = root.closest(blockSelector);
       const titleEl = localTitleRef.current;
-      const probe = probeRef.current;
-      if (!block || !titleEl || !probe) {
-        setShowTime(Boolean(timeText));
-        return;
-      }
+      if (!block || !titleEl) return;
 
-      const blockRect = block.getBoundingClientRect();
-      const titleRect = titleEl.getBoundingClientRect();
-      const timeHeight = probe.offsetHeight + 2; // + gap/margin above time
-      // Space from title bottom to block bottom must fit the full time line.
-      const room = blockRect.bottom - titleRect.bottom;
-      setShowTime(room + 0.5 >= timeHeight);
+      const titleLine = readLineHeight(titleEl);
+      const available = labelBudget(block, titleEl);
+      const probe = probeRef.current;
+      const timeLine = probe ? Math.max(probe.offsetHeight, readLineHeight(probe)) : 0;
+      const reserveTime = Boolean(timeText) && timeLine > 0
+        && available + 0.5 >= titleLine + timeLine + STACK_GAP;
+      const titleBudget = reserveTime ? available - timeLine - STACK_GAP : available;
+      const maxTitleLines = linesThatFit(titleBudget, titleLine);
+      const naturalTitleLines = countWrappedLines(titleEl, titleLine);
+      const usedTitleLines = Math.min(naturalTitleLines, maxTitleLines);
+
+      setShowTime((prev) => (prev === reserveTime ? prev : reserveTime));
+      setTitleLines((prev) => (prev === maxTitleLines ? prev : maxTitleLines));
+
+      if (!reserveTime) return;
+      const timeEl = timeElRef.current;
+      const timeLineHeight = timeEl ? readLineHeight(timeEl) : timeLine;
+      const timeBudget = available - usedTitleLines * titleLine - STACK_GAP;
+      const maxTimeLines = linesThatFit(timeBudget, timeLineHeight);
+      setTimeLines((prev) => (prev === maxTimeLines ? prev : maxTimeLines));
     };
 
     const onHoverChange = () => {
@@ -102,9 +133,9 @@ export default function StackedBlockLabel({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 2,
+        gap: STACK_GAP,
         flex: 1,
-        width: 'auto',
+        width: '100%',
         maxWidth: '100%',
         minWidth: 0,
         alignItems: 'stretch',
@@ -120,14 +151,11 @@ export default function StackedBlockLabel({
           fontSize: 13,
           fontWeight: 700,
           lineHeight: 1.2,
-          whiteSpace: 'normal',
-          overflow: 'hidden',
-          textOverflow: 'clip',
           minWidth: 0,
           maxWidth: '100%',
-          wordBreak: 'break-word',
           ...titleStyle,
           ...(titleMaxWidth != null ? { maxWidth: `${titleMaxWidth}px` } : {}),
+          ...lineClampStyle(titleLines),
         }}
       >
         {title}
@@ -159,12 +187,11 @@ export default function StackedBlockLabel({
                 fontWeight: 400,
                 opacity: 0.9,
                 marginTop: 2,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
+                minWidth: 0,
                 maxWidth: '100%',
                 ...timeStyle,
                 ...(timeMaxWidth != null ? { maxWidth: `${timeMaxWidth}px` } : {}),
+                ...lineClampStyle(timeLines),
               }}
             >
               {timeText}

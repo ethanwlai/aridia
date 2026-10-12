@@ -1266,6 +1266,21 @@ html.layout-drawer .day-timeline-scroll {
   font-size: 16px;
 }
 
+.calendar-grid--condensed .day-time-block-draft {
+  padding: 6px 2px;
+}
+
+.calendar-grid--condensed .day-time-block-draft.is-short {
+  justify-content: flex-start;
+}
+
+.calendar-grid--condensed .day-time-block-draft-time {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .calendar-grid--condensed .task-action-buttons-inline,
 .calendar-grid--condensed .task-action-buttons-long,
 .calendar-grid--condensed .task-action-buttons,
