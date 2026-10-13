@@ -73,6 +73,13 @@ function isItemSelectionTarget(target) {
   return Boolean(target.closest(ITEM_SELECTION_SELECTOR));
 }
 
+const DASHBOARD_LIST_TITLES = {
+  tasks: 'Task List',
+  events: 'Event List',
+  incomplete: 'Incomplete List',
+  completed: 'Complete List',
+};
+
 function matchesDashboardFilter(item, filter) {
   const isTask = item.type === 'task';
   const isDone = item.status === 'completed';
@@ -906,6 +913,7 @@ const App = () => {
   const sortedTasks = selectedDashboardButton === 'events'
     ? sortEventsByDeadline(dashboardItems)
     : sortTasks(dashboardItems, motivation);
+  const dashboardListTitle = DASHBOARD_LIST_TITLES[selectedDashboardButton] ?? 'Task List';
 
   // Drag state for dashboard handle
   const dragHandleRef = useRef(null);
@@ -1339,7 +1347,8 @@ const App = () => {
                     <MotivationSlider motivation={motivation} setMotivation={setMotivation} />
                   )}
                   <TaskList 
-                    tasks={sortedTasks} 
+                    tasks={sortedTasks}
+                    title={dashboardListTitle}
                     onDelete={deleteTask} 
                     onEdit={handleEditTask}
                     onUpdateStatus={updateTaskStatus}

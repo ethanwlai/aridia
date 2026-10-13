@@ -23,7 +23,7 @@ function parseLocalDate(dateStr) {
   return null;
 }
 
-const TaskList = ({ tasks, onDelete, onEdit, onUpdateStatus, onAutoSchedule, onQuickMove, onExtendDuration }) => {
+const TaskList = ({ tasks, title = 'Task List', onDelete, onEdit, onUpdateStatus, onAutoSchedule, onQuickMove, onExtendDuration }) => {
   const filteredTasks = tasks || [];
   
   const getPriorityColor = (level) => {
@@ -143,7 +143,7 @@ const TaskList = ({ tasks, onDelete, onEdit, onUpdateStatus, onAutoSchedule, onQ
             color: 'white',
             cursor: 'default'
           }}>
-            Recommended Task Order
+            {title}
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', cursor: 'default' }}>
