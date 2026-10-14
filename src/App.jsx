@@ -18,7 +18,7 @@ import { useLayoutMode, getLayoutMode } from './hooks/useLayoutMode';
 import useDrawerEdgeSwipe from './hooks/useDrawerEdgeSwipe';
 import { useAuth } from './context/AuthContext';
 import { sortEventsByDeadline, sortTasks } from './utils/taskSorter';
-import { isSameDate, startOfDay } from './utils/calendarItems';
+import { isItemScheduled, isSameDate, startOfDay } from './utils/calendarItems';
 import {
   PENDING_AUTH_KEY,
   clearLocalTasks,
@@ -64,6 +64,7 @@ const ITEM_SELECTION_SELECTOR = [
   '.day-agenda-row',
   '.mcg-chip',
   '.day-detail-item',
+  '.task-list-item',
   '[data-task-id]',
 ].join(', ');
 
@@ -134,6 +135,8 @@ const App = () => {
 
   // Highlighting state for sidebar items
   const [highlightedItem, setHighlightedItem] = useState(null); // { id, type: 'task' | 'event' }
+  const [listFocus, setListFocus] = useState(null); // dashboard list row, including unscheduled items
+  const [locateToken, setLocateToken] = useState(0);
   
   // Trigger to clear activeBlockKey in CalendarGrid when Quick Move is used
   const [clearActiveBlockTrigger, setClearActiveBlockTrigger] = useState(0);
@@ -525,6 +528,7 @@ const App = () => {
   const handleSetViewMode = useCallback((mode) => {
     setPanelDate(null);
     setHighlightedItem(null);
+    setListFocus(null);
     setViewMode(mode);
   }, []);
 
@@ -619,6 +623,7 @@ const App = () => {
   const openDayView = useCallback((date) => {
     setPanelDate(null);
     setHighlightedItem(null);
+    setListFocus(null);
     setCenterDay(startOfDay(date));
     setViewMode('day');
   }, []);
@@ -626,14 +631,21 @@ const App = () => {
   const openMonthView = useCallback((date) => {
     setPanelDate(null);
     setHighlightedItem(null);
+    setListFocus(null);
     setCenterDay(startOfDay(date));
     setViewMode('month');
+  }, []);
+
+  const handleHighlightItem = useCallback((item) => {
+    setListFocus(null);
+    setHighlightedItem(item);
   }, []);
 
   useEffect(() => {
     const handlePointerDown = (e) => {
       if (isItemSelectionTarget(e.target)) return;
       setHighlightedItem(null);
+      setListFocus(null);
     };
     document.addEventListener('mousedown', handlePointerDown, true);
     return () => document.removeEventListener('mousedown', handlePointerDown, true);
@@ -645,6 +657,7 @@ const App = () => {
     
     // Explicitly clear any highlighting to prevent unwanted highlights
     setHighlightedItem(null);
+    setListFocus(null);
     
     // Set flag to indicate Quick Move is in progress (checked during render to prevent flicker)
     setIsQuickMoving(true);
@@ -703,6 +716,7 @@ const App = () => {
     
     // Ensure highlighting remains cleared after update
     setHighlightedItem(null);
+    setListFocus(null);
     
     // Reset Quick Move flag after update completes
     // Use setTimeout to ensure it happens after render
@@ -861,6 +875,7 @@ const App = () => {
   }, [editCardPos, editingTask]);
 
   const handleSidebarItemClick = (item) => {
+    setListFocus(null);
     // Toggle highlighting - if clicking the same item, unhighlight it
     if (highlightedItem && highlightedItem.id === item.id && highlightedItem.type === item.type) {
       setHighlightedItem(null);
@@ -869,6 +884,19 @@ const App = () => {
       if (isDrawerChrome) closeDrawer();
     }
   };
+
+  const handleLocateListItem = useCallback((item) => {
+    if (!item) return;
+    const selection = { id: item.id, type: item.type };
+    setListFocus(selection);
+    if (!isItemScheduled(item)) {
+      setHighlightedItem(null);
+      return;
+    }
+    setHighlightedItem(selection);
+    setLocateToken((n) => n + 1);
+    if (isDrawerChrome) closeDrawer();
+  }, [isDrawerChrome, closeDrawer]);
 
   // Auto-navigate calendar to highlighted task's day when it changes
   // Use a ref to track the last highlighted item ID to only navigate on actual changes
@@ -1058,7 +1086,7 @@ const App = () => {
           onQuickMove={handleQuickMove}
           onExtendDuration={handleExtendDuration}
           highlightedItem={highlightedItem}
-          onHighlightItem={setHighlightedItem}
+          onHighlightItem={handleHighlightItem}
           onEdit={handleEditTask}
           searchResults={searchResults}
           allowCalendarDrag={!isDrawerChrome}
@@ -1355,6 +1383,8 @@ const App = () => {
                     onAutoSchedule={handleAutoSchedule}
                     onQuickMove={handleQuickMove}
                     onExtendDuration={handleExtendDuration}
+                    onLocateItem={handleLocateListItem}
+                    listFocus={listFocus}
                   />
                   <TaskForm addTask={addTask} />
                 </div>
@@ -1413,7 +1443,7 @@ const App = () => {
                 onSearch={setSearchResults}
                 sidebarWidth={sidebarBaseWidth + dashboardWidth}
                 dashboardFullyOpen={!isDrawerChrome && dragProgress === 1}
-                onHighlightItem={setHighlightedItem}
+                onHighlightItem={handleHighlightItem}
                 compactChrome={isDrawerChrome}
                 isCompact={isCompact}
                 onOpenDrawer={toggleDrawer}
@@ -1429,7 +1459,7 @@ const App = () => {
                   centerDay={centerDay}
                   setCenterDay={smoothNavigateTo}
                   highlightedItem={highlightedItem}
-                  onHighlightItem={setHighlightedItem}
+                  onHighlightItem={handleHighlightItem}
                   isNavigating={isNavigating}
                   searchResults={searchResults}
                   onAutoSchedule={handleAutoSchedule}
@@ -1439,6 +1469,7 @@ const App = () => {
                   clearActiveBlockTrigger={clearActiveBlockTrigger}
                   isQuickMoving={isQuickMoving}
                   focusNowToken={focusNowToken}
+                  locateToken={locateToken}
                 />
               )}
               {viewMode === 'day' && (
@@ -1455,8 +1486,9 @@ const App = () => {
                   onQuickMove={handleQuickMove}
                   onExtendDuration={handleExtendDuration}
                   highlightedItem={highlightedItem}
-                  onHighlightItem={setHighlightedItem}
+                  onHighlightItem={handleHighlightItem}
                   focusNowToken={focusNowToken}
+                  locateToken={locateToken}
                 />
               )}
               {(viewMode === 'month' || viewMode === 'year') && (
@@ -1470,6 +1502,8 @@ const App = () => {
                       onDayClick={setPanelDate}
                       onDayDoubleClick={isDrawerChrome ? undefined : openDayView}
                       onMonthTitleClick={openMonthView}
+                      highlightedItem={highlightedItem}
+                      locateToken={locateToken}
                     />
                   ) : (
                     <MonthView
@@ -1480,8 +1514,9 @@ const App = () => {
                       onDayClick={setPanelDate}
                       onDayDoubleClick={isDrawerChrome ? undefined : openDayView}
                       highlightedItem={highlightedItem}
-                      onHighlightItem={setHighlightedItem}
+                      onHighlightItem={handleHighlightItem}
                       compact={isCompact}
+                      locateToken={locateToken}
                     />
                   )}
                   {panelDate && (
@@ -1490,9 +1525,10 @@ const App = () => {
                       tasks={tasks}
                       onClose={() => setPanelDate(null)}
                       highlightedItem={highlightedItem}
-                      onHighlightItem={setHighlightedItem}
+                      onHighlightItem={handleHighlightItem}
                       onOpenDay={openDayView}
                       asSheet={isDrawerChrome}
+                      locateToken={locateToken}
                     />
                   )}
                 </div>

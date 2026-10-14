@@ -23,8 +23,11 @@ function parseLocalDate(dateStr) {
   return null;
 }
 
-const TaskList = ({ tasks, title = 'Task List', onDelete, onEdit, onUpdateStatus, onAutoSchedule, onQuickMove, onExtendDuration }) => {
+const TaskList = ({ tasks, title = 'Task List', onDelete, onEdit, onUpdateStatus, onAutoSchedule, onQuickMove, onExtendDuration, onLocateItem, listFocus = null }) => {
   const filteredTasks = tasks || [];
+  const focusInList = Boolean(
+    listFocus && filteredTasks.some((task) => task.id === listFocus.id && task.type === listFocus.type)
+  );
   
   const getPriorityColor = (level) => {
     switch (level) {
@@ -167,10 +170,20 @@ const TaskList = ({ tasks, title = 'Task List', onDelete, onEdit, onUpdateStatus
                 console.error(`Error parsing date for ${task.title}:`, error);
               }
 
+              const selected = Boolean(
+                listFocus && listFocus.id === task.id && listFocus.type === task.type
+              );
+
               return (
                 <div 
                   key={task.id}
                   className="task-list-item"
+                  onClick={(e) => {
+                    if (e.target.closest('.task-delete-btn, .task-complete-btn, .task-edit-btn, .task-actions-dropdown-trigger, .task-actions-dropdown-menu, .task-actions-dropdown-submenu')) {
+                      return;
+                    }
+                    onLocateItem?.(task);
+                  }}
                   style={{
                     background: '#2e0066',
                     padding: '1rem',
@@ -178,7 +191,10 @@ const TaskList = ({ tasks, title = 'Task List', onDelete, onEdit, onUpdateStatus
                     borderRadius: '8px',
                     border: '1px solid #a084e8',
                     position: 'relative',
-                    cursor: 'default'
+                    cursor: 'pointer',
+                    opacity: focusInList && !selected ? 0.3 : 1,
+                    transform: selected ? 'scale(1.02)' : 'scale(1)',
+                    transition: 'opacity 0.2s ease, transform 0.2s ease',
                   }}
                 >
                    {/* Task Number */}

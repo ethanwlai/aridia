@@ -52,6 +52,7 @@ const DayView = ({
   highlightedItem = null,
   onHighlightItem,
   focusNowToken = 0,
+  locateToken = 0,
 }) => {
   const { isCompact, isCoarse } = useLayoutMode();
   const selectedDate = startOfDay(centerDay || new Date());
@@ -258,6 +259,7 @@ const DayView = ({
           tapToCreate={isCompact || isCoarse}
           longPressMove={isCompact || isCoarse}
           focusNowToken={focusNowToken}
+          locateToken={locateToken}
         />
         <DayAgenda
           day={selectedDate}
@@ -277,6 +279,7 @@ const DayView = ({
           createSession={isCompact ? null : createSession}
           onCancelCreate={closeCreate}
           onTimesChange={handleCreateTimesChange}
+          locateToken={locateToken}
         />
       </div>
       {isCompact && (

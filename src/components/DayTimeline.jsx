@@ -94,6 +94,7 @@ export default function DayTimeline({
   tapToCreate = false,
   longPressMove = false,
   focusNowToken = 0,
+  locateToken = 0,
 }) {
   const scrollRef = useRef(null);
   const dayColumnRef = useRef(null);
@@ -106,6 +107,7 @@ export default function DayTimeline({
   const ignoreScrollRef = useRef(false);
   const justDraggedRef = useRef(false);
   const dragStateRef = useRef(null);
+  const scrolledLocateRef = useRef(0);
   dragStateRef.current = dragState;
   const createDragRef = useRef(null);
   const stopCreateDragListenersRef = useRef(null);
@@ -188,14 +190,24 @@ export default function DayTimeline({
   }, [focusNowToken, isToday, getCurrentTimePosition]);
 
   useEffect(() => {
-    if (!highlightedItem || !scrollRef.current) return;
+    if (!highlightedItem || !scrollRef.current) {
+      if (!highlightedItem) setActiveId(null);
+      return;
+    }
     const drag = dragStateRef.current;
     if (drag?.source === 'block' || drag?.source === 'agenda') return;
     const id = String(highlightedItem.id).split(':')[0];
-    scrollHighlightedIntoView(scrollRef.current, `[data-day-block-id="${id}"]`);
+    const locateKey = `${locateToken}:${dayKey}`;
+    const force = locateToken > 0 && scrolledLocateRef.current !== locateKey;
+    const found = scrollHighlightedIntoView(
+      scrollRef.current,
+      `[data-day-block-id="${id}"]`,
+      { force }
+    );
+    if (force && found) scrolledLocateRef.current = locateKey;
     const match = timedItems.find((item) => String(item.id) === id);
     if (match) setActiveId(match.id);
-  }, [highlightedItem, timedItems]);
+  }, [highlightedItem, timedItems, locateToken]);
 
   const yToSnappedMinutes = useCallback((clientY, step = 15) => {
     if (!dayColumnRef.current) return 0;

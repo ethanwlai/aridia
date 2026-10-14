@@ -4,6 +4,7 @@ import TaskCreationCard from './TaskCreationCard';
 import TaskForm from './TaskForm';
 import TaskActionsDropdown from './TaskActionsDropdown';
 import {
+  formatDateKey,
   formatItemTime,
   getCalendarHighlightOpacity,
   getItemColor,
@@ -12,6 +13,8 @@ import {
   startOfDay,
   toggleCalendarHighlight,
 } from '../utils/calendarItems';
+import CreateSheet from './CreateSheet';
+import { useLayoutMode } from '../hooks/useLayoutMode';
 
 function PriorityLabel({ priority }) {
   if (priority >= 4) return <span className="day-agenda-priority high">High</span>;
@@ -119,18 +122,26 @@ export default function DayAgenda({
   createSession = null,
   onCancelCreate,
   onTimesChange,
+  locateToken = 0,
 }) {
   const [showCreate, setShowCreate] = useState(false);
   const agendaRef = useRef(null);
+  const scrolledLocateRef = useRef(0);
   const dayStart = startOfDay(day);
+  const { isCompact, isDrawerChrome } = useLayoutMode();
 
   useEffect(() => {
     if (!highlightedItem) return;
-    scrollHighlightedIntoView(
+    const dayKey = formatDateKey(dayStart);
+    const locateKey = `${locateToken}:${dayKey}`;
+    const force = locateToken > 0 && scrolledLocateRef.current !== locateKey;
+    const found = scrollHighlightedIntoView(
       agendaRef.current,
-      `[data-task-id="${highlightedItem.id}"]`
+      `[data-task-id="${highlightedItem.id}"]`,
+      { force }
     );
-  }, [highlightedItem]);
+    if (force && found) scrolledLocateRef.current = locateKey;
+  }, [highlightedItem, locateToken, scheduled, unscheduled, day]);
 
   useEffect(() => {
     if (!showCreate) return undefined;
@@ -184,11 +195,13 @@ export default function DayAgenda({
       ) : (
         <>
       <div className="day-agenda-body">
+      {!isCompact && (
       <div className="day-agenda-toolbar">
         <button type="button" className="day-agenda-add-btn" onClick={openCreate}>
           + Add
         </button>
       </div>
+      )}
 
       <section className="day-agenda-section">
         <h3 className="day-agenda-section-title">Scheduled</h3>
@@ -209,7 +222,30 @@ export default function DayAgenda({
       </section>
       </div>
 
-      {showCreate && createPortal(
+      {showCreate && (isDrawerChrome ? (
+        <CreateSheet open onClose={() => setShowCreate(false)}>
+            <TaskCreationCard
+              showPlusCircle={false}
+              onCancel={() => setShowCreate(false)}
+              onAdd={(task) => {
+                if (task.startTime && task.endTime && task.startTime === task.endTime) return;
+                onAdd?.(task);
+                setShowCreate(false);
+              }}
+              defaultDeadline={dayStart}
+              defaultStartTime={(() => {
+                const d = new Date(dayStart);
+                d.setHours(9, 0, 0, 0);
+                return d;
+              })()}
+              defaultEndTime={(() => {
+                const d = new Date(dayStart);
+                d.setHours(10, 0, 0, 0);
+                return d;
+              })()}
+            />
+        </CreateSheet>
+      ) : createPortal(
         <div className="day-agenda-create-overlay" onClick={() => setShowCreate(false)}>
           <div className="day-agenda-create-card" onClick={(e) => e.stopPropagation()}>
             <TaskCreationCard
@@ -235,7 +271,7 @@ export default function DayAgenda({
           </div>
         </div>,
         document.body
-      )}
+      ))}
         </>
       )}
     </aside>

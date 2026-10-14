@@ -312,8 +312,25 @@ export function getCalendarHighlightOpacity(highlightedItem, item) {
   return isCalendarHighlighted(highlightedItem, item) ? 1 : 0.2;
 }
 
-/** Center a highlighted task in a scroll container if it is not fully visible. */
-export function scrollHighlightedIntoView(container, selector) {
+/** A calendar block exists only when the item has a date and a full time range. */
+export function isItemScheduled(item) {
+  return Boolean(item?.deadline && item.startTime && item.endTime);
+}
+
+/** CSS selector for a task id on calendar blocks, including grouped week blocks. */
+export function highlightedTaskSelector(id, attribute = 'data-task-id') {
+  const raw = String(id ?? '').split(':')[0];
+  const safe = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(raw)
+    : raw.replace(/(["\\])/g, '\\$1');
+  if (attribute === 'data-task-id') {
+    return `[data-task-id="${safe}"], [data-task-ids~="${safe}"]`;
+  }
+  return `[${attribute}="${safe}"]`;
+}
+
+/** Center a highlighted task in a scroll container. By default, only if it is not fully visible. */
+export function scrollHighlightedIntoView(container, selector, { force = false } = {}) {
   if (!container || !selector) return false;
   const el = container.querySelector(selector);
   if (!el) return false;
@@ -325,12 +342,11 @@ export function scrollHighlightedIntoView(container, selector) {
     && elRect.bottom <= containerRect.bottom
   );
 
-  if (!isVisible) {
-    el.scrollIntoView({
-      behavior: 'smooth',
-      block: 'center',
-      inline: 'nearest',
-    });
+  if (force || !isVisible) {
+    const delta = (elRect.top + elRect.height / 2) - (containerRect.top + containerRect.height / 2);
+    const max = Math.max(0, container.scrollHeight - container.clientHeight);
+    const top = Math.max(0, Math.min(max, container.scrollTop + delta));
+    container.scrollTo({ top, behavior: 'smooth' });
   }
   return true;
 }
