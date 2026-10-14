@@ -232,7 +232,8 @@
   color: #fff;
 }
 
-.mcg-day.is-selected:not(.is-today) .mcg-day-number {
+.mcg-day.is-selected:not(.is-today) .mcg-day-number,
+.mcg-day.is-located:not(.is-today) .mcg-day-number {
   background: #1d4ed8;
   color: #fff;
 }
@@ -402,4 +403,8 @@
   .day-detail-panel {
     width: 240px;
   }
+}
+
+html.layout-drawer .overview-shell .day-detail-panel:not(.day-detail-panel--sheet) {
+  width: min(300px, 42vw);
 }

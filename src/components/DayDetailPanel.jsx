@@ -7,6 +7,9 @@ import {
   getCalendarHighlightOpacity,
   getItemColor,
   getItemTitle,
+  highlightedTaskSelector,
+  isCalendarHighlighted,
+  scrollHighlightedIntoView,
   toggleCalendarHighlight,
 } from '../utils/calendarItems';
 import './OverviewViews.css';
@@ -17,10 +20,28 @@ export default function DayDetailPanel({
   onClose,
   highlightedItem = null,
   onHighlightItem,
+  onOpenDay,
+  asSheet = false,
+  locateToken = 0,
 }) {
   const panelRef = useRef(null);
+  const listRef = useRef(null);
+  const scrolledLocateRef = useRef(0);
   const itemsByDate = useMemo(() => buildItemsByDate(tasks), [tasks]);
   const items = date ? (itemsByDate[formatDateKey(date)] || []) : [];
+
+  useEffect(() => {
+    const locateKey = `${locateToken}:${date ? formatDateKey(date) : ''}`;
+    if (!locateToken || !highlightedItem || !listRef.current) return;
+    if (scrolledLocateRef.current === locateKey) return;
+    if (!items.some((item) => isCalendarHighlighted(highlightedItem, item))) return;
+    const scrolled = scrollHighlightedIntoView(
+      listRef.current,
+      highlightedTaskSelector(highlightedItem.id),
+      { force: true }
+    );
+    if (scrolled) scrolledLocateRef.current = locateKey;
+  }, [locateToken, highlightedItem, date, items]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -36,7 +57,7 @@ export default function DayDetailPanel({
   if (!date) return null;
 
   return (
-    <aside ref={panelRef} className="day-detail-panel">
+    <aside ref={panelRef} className={`day-detail-panel${asSheet ? ' day-detail-panel--sheet' : ''}`}>
       <div className="day-detail-header">
         <div>
           <h2 className="day-detail-heading">{format(date, 'EEEE')}</h2>
@@ -46,7 +67,16 @@ export default function DayDetailPanel({
           ×
         </button>
       </div>
-      <div className="day-detail-list">
+      {onOpenDay && (
+        <button
+          type="button"
+          className="day-detail-open-day"
+          onClick={() => onOpenDay(date)}
+        >
+          Open day
+        </button>
+      )}
+      <div className="day-detail-list" ref={listRef}>
         {items.length === 0 ? (
           <p className="day-detail-empty">No tasks or events</p>
         ) : (

@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { format } from 'date-fns';
-import { formatDateKey, getCalendarHighlightOpacity, getItemColor, getItemTitle, getMonthCells, isSameDate, toggleCalendarHighlight } from '../utils/calendarItems';
+import { formatDateKey, getCalendarHighlightOpacity, getItemColor, getItemTitle, getMonthCells, isCalendarHighlighted, isSameDate, toggleCalendarHighlight } from '../utils/calendarItems';
 import './OverviewViews.css';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -33,6 +33,10 @@ export default function MonthCalendarGrid({
   };
 
   const handleDayClick = (date) => {
+    if (!onDayDoubleClick) {
+      onDayClick?.(date);
+      return;
+    }
     clearClickTimer();
     clickTimerRef.current = setTimeout(() => {
       clickTimerRef.current = null;
@@ -67,16 +71,19 @@ export default function MonthCalendarGrid({
           const items = itemsByDate[key] || [];
           const isToday = today && isSameDate(date, today);
           const isSelected = selectedDate && isSameDate(date, selectedDate);
+          const isLocated = isCompact && inMonth && items.some((item) => isCalendarHighlighted(highlightedItem, item));
           const extraCount = Math.max(0, items.length - maxChips);
 
           return (
             <div
               key={key}
+              data-date={key}
               className={[
                 'mcg-day',
                 inMonth ? 'in-month' : 'out-month',
                 isToday ? 'is-today' : '',
                 isSelected ? 'is-selected' : '',
+                isLocated ? 'is-located' : '',
                 items.length > 0 ? 'has-items' : '',
               ].filter(Boolean).join(' ')}
               onClick={() => handleDayClick(date)}

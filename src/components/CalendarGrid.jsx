@@ -9,7 +9,7 @@ import StackedBlockLabel from './StackedBlockLabel';
 import NowMarker from './NowMarker';
 import CreateSheet from './CreateSheet';
 import CalendarViewNav from './CalendarViewNav';
-import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK, getItemColor, snapMinutes, getItemDurationMinutes, formatMinutes, toggleCalendarHighlight, getCalendarHighlightOpacity, isCalendarHighlighted, startOfDay } from '../utils/calendarItems';
+import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK, getItemColor, snapMinutes, getItemDurationMinutes, formatMinutes, toggleCalendarHighlight, isCalendarHighlighted, startOfDay, scrollHighlightedIntoView, highlightedTaskSelector } from '../utils/calendarItems';
 import { useLayoutMode } from '../hooks/useLayoutMode';
 
 // Global drag state to bypass getData() limitations
@@ -111,7 +111,7 @@ function snapTotalMinutes(hour, minute) {
   };
 }
 
-function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, onUpdateStatus, onUpdateTask, centerDay, setCenterDay, highlightedItem, onHighlightItem, isNavigating = false, searchResults = null, onAutoSchedule, onQuickMove, onExtendDuration, clearActiveBlockTrigger, isQuickMoving, onEdit, focusNowToken = 0 }) {
+function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, onUpdateStatus, onUpdateTask, centerDay, setCenterDay, highlightedItem, onHighlightItem, isNavigating = false, searchResults = null, onAutoSchedule, onQuickMove, onExtendDuration, clearActiveBlockTrigger, isQuickMoving, onEdit, focusNowToken = 0, locateToken = 0 }) {
   const { isCompact, isCoarse, isDrawerChrome } = useLayoutMode();
   const condensedWeek = isCompact;
   const tapToCreate = isCompact || isCoarse;
@@ -165,6 +165,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   // Ref to store the closeTimePicker method
   const closeTimePickerRef = useRef(null);
   const scrollWrapperRef = useRef();
+  const scrolledLocateRef = useRef(0);
   const ignoreScrollRef = useRef(false);
   // State for debug red dot
   const [debugDot, setDebugDot] = useState(null);
@@ -183,14 +184,11 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
 
   // Reset all block opacities when activeBlockKey changes
   useEffect(() => {
-    const blocks = document.querySelectorAll('.calendar-time-block');
-    blocks.forEach(block => {
-      // Reset to default opacity (1) when no active block
-      if (activeBlockKey === null) {
-        block.style.opacity = '1';
-      }
+    if (activeBlockKey !== null || highlightedItem) return;
+    document.querySelectorAll('.calendar-time-block').forEach((block) => {
+      block.style.opacity = '1';
     });
-  }, [activeBlockKey]);
+  }, [activeBlockKey, highlightedItem]);
 
   // Clear activeBlockKey when clearActiveBlockTrigger changes (triggered by Quick Move)
   // Use useLayoutEffect to clear synchronously before browser paint, preventing flicker
@@ -205,6 +203,25 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       });
     }
   }, [clearActiveBlockTrigger]);
+
+  useEffect(() => {
+    if (isQuickMoving || ignoreActiveBlockKeyRef.current) return;
+    if (!highlightedItem || !scrollWrapperRef.current) {
+      if (!highlightedItem) setActiveBlockKey(null);
+      return;
+    }
+    const selector = highlightedTaskSelector(highlightedItem.id);
+    const el = scrollWrapperRef.current.querySelector(selector);
+    if (!el) return;
+    const blockKey = el.getAttribute('data-block-key');
+    if (blockKey) {
+      setActiveBlockKey((prev) => (prev === blockKey ? prev : blockKey));
+    }
+    const locateKey = `${locateToken}:${centerDay?.getTime?.() ?? ''}`;
+    if (!locateToken || scrolledLocateRef.current === locateKey) return;
+    const scrolled = scrollHighlightedIntoView(scrollWrapperRef.current, selector, { force: true });
+    if (scrolled) scrolledLocateRef.current = locateKey;
+  }, [highlightedItem, locateToken, centerDay, tasks, isQuickMoving]);
 
   // Measure card width and height after it renders
   useEffect(() => {
@@ -2000,6 +2017,10 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
               // Get task ID first (needed for highlighting logic)
               const taskId = block._group ? block.tasks[0].id : block.id;
               
+              const blockItems = block._group ? block.tasks : [block];
+              const blockMatchesHighlight = Boolean(
+                highlightedItem && blockItems.some((item) => isCalendarHighlighted(highlightedItem, item))
+              );
               // Determine opacity: if activeBlockKey is set, only that block is opaque, all others are transparent
               // Ignore activeBlockKey if Quick Move is in progress to prevent flicker
               let customOpacity = 1;
@@ -2008,10 +2029,9 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
               }
               
               // Add visual feedback for highlighted blocks
-              const isHighlighted = activeBlockKey === blockKey;
-              const highlightSource = block._group ? block.tasks[0] : block;
+              const isHighlighted = activeBlockKey === blockKey || blockMatchesHighlight;
               if (highlightedItem) {
-                customOpacity = getCalendarHighlightOpacity(highlightedItem, highlightSource);
+                customOpacity = blockMatchesHighlight ? 1 : 0.2;
               }
               
 
@@ -2028,6 +2048,9 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
               return (
                 <div
                   key={blockKey}
+                  data-block-key={blockKey}
+                  data-task-id={block._group ? undefined : taskId}
+                  data-task-ids={block._group ? block.tasks.map((task) => task.id).join(' ') : undefined}
                   className={`calendar-time-block ${statusClass}${isShort ? ' short-block' : ''}${isHighlighted ? ' is-selected' : ''}${shouldHide ? ' is-dragging' : ''}`}
                   style={{
                     position: 'absolute',
