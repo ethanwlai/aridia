@@ -102,6 +102,7 @@ export default function DayTimeline({
   const [nowPos, setNowPos] = useState(null);
   const [dragState, setDragState] = useState(null);
   const [createDrag, setCreateDrag] = useState(null);
+  const [createAnchor, setCreateAnchor] = useState(null);
   const [colWidth, setColWidth] = useState(0);
   const userHasScrolled = useRef(false);
   const ignoreScrollRef = useRef(false);
@@ -247,6 +248,20 @@ export default function DayTimeline({
     return { start, end };
   };
 
+  useEffect(() => {
+    if (!createSession) setCreateAnchor(null);
+  }, [createSession]);
+
+  const placeCreateAnchor = (clientX, clientY) => {
+    const column = dayColumnRef.current;
+    if (!column) return;
+    const rect = column.getBoundingClientRect();
+    setCreateAnchor({
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    });
+  };
+
   const handleColumnClick = (e) => {
     if (e.target.closest('.day-time-block') || e.target.closest('.day-agenda')) return;
     if (justDraggedRef.current) {
@@ -256,10 +271,12 @@ export default function DayTimeline({
     if (tapToCreate) {
       const range = minutesFromTap(e.clientY);
       if (!range) return;
+      placeCreateAnchor(e.clientX, e.clientY);
       onCreateAt?.(range.start, range.end);
       return;
     }
     const minutes = Math.max(0, Math.min(24 * 60 - CREATE_DURATION_MINUTES, yToMinutes(e.clientY)));
+    placeCreateAnchor(e.clientX, e.clientY);
     onCreateAt?.(minutes);
   };
 
@@ -558,6 +575,7 @@ export default function DayTimeline({
       }, 400);
       if (!isOverScrollArea(upEvent.clientX, upEvent.clientY)) return;
       const { startMinutes, endMinutes } = rangeFromCreateDrag(originMinutes, currentMinutes);
+      placeCreateAnchor(upEvent.clientX, upEvent.clientY);
       onCreateAtRef.current?.(startMinutes, endMinutes);
     };
 
@@ -726,6 +744,15 @@ export default function DayTimeline({
             {HOURS.map((hour) => (
               <div key={hour} className="day-timeline-slot" style={{ height: ROW_HEIGHT }} />
             ))}
+
+            {createSession && createAnchor && (
+              <div
+                className="plus-circle"
+                style={{ left: createAnchor.x - 18, top: createAnchor.y - 18, zIndex: 6, pointerEvents: 'none' }}
+              >
+                <span className="plus-sign">+</span>
+              </div>
+            )}
 
             {isToday && nowPos != null && <NowMarker top={nowPos} />}
 

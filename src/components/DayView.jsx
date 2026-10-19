@@ -287,6 +287,7 @@ const DayView = ({
           {createSession && (
           <TaskForm
             variant="day"
+            eventOnly
             addTask={handleCreateAdd}
             defaultStartTime={createSession.start}
             defaultEndTime={createSession.end}

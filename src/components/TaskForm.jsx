@@ -897,11 +897,12 @@ const TaskForm = ({
   onTimesChange,
   onCancel,
   variant,
+  eventOnly = false,
 }) => {
   const ui = TASKFORM_THEMES[variant] || TASKFORM_THEMES.dashboard;
   const isDay = variant === 'day';
-  // Toggle state
-  const [creationType, setCreationType] = useState(defaultStartTime ? 'event' : 'task'); // 'task' or 'event'
+  // Toggle state. Calendar create locks this to an event.
+  const [creationType, setCreationType] = useState(eventOnly || defaultStartTime ? 'event' : 'task'); // 'task' or 'event'
   
   // Shared state
   const [name, setName] = useState('');
@@ -1751,7 +1752,7 @@ const TaskForm = ({
               {creationType === 'task' ? 'Task' : 'Event'} Creation
             </div>
             
-            {/* Event/Task Toggle */}
+            {/* Event/Task Toggle. Calendar create shows a fixed Event pill. */}
             <div style={{
               display: 'flex',
               flexShrink: 0,
@@ -1760,6 +1761,7 @@ const TaskForm = ({
               padding: '0.1rem',
               border: `1px solid ${ui.toggleBorder}`
             }}>
+              {!eventOnly && (
               <button
                 type="button"
                 className={`creation-type-btn${creationType === 'task' ? ' is-selected' : ''}`}
@@ -1767,10 +1769,16 @@ const TaskForm = ({
               >
                 Task
               </button>
+              )}
               <button
                 type="button"
-                className={`creation-type-btn${creationType === 'event' ? ' is-selected' : ''}`}
-                onClick={() => { setCreationType('event'); setShowTimePicker(false); }}
+                className={`creation-type-btn${eventOnly || creationType === 'event' ? ' is-selected' : ''}`}
+                aria-disabled={eventOnly || undefined}
+                onClick={() => {
+                  if (eventOnly) return;
+                  setCreationType('event');
+                  setShowTimePicker(false);
+                }}
               >
                 Event
               </button>

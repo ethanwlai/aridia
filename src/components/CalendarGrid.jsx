@@ -352,7 +352,17 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     return { start, end };
   }
 
-  function openCondensedCreate(colIdx, startMinutes, endMinutes) {
+  function scrollAnchor(clientX, clientY) {
+    const el = scrollWrapperRef.current;
+    if (!el || clientX == null || clientY == null) return {};
+    const rect = el.getBoundingClientRect();
+    return {
+      anchorX: clientX - rect.left + el.scrollLeft,
+      anchorY: clientY - rect.top + el.scrollTop,
+    };
+  }
+
+  function openCondensedCreate(colIdx, startMinutes, endMinutes, point) {
     const day = days[colIdx];
     if (!day) return;
     const { start, end } = datesForRange(day, startMinutes, endMinutes);
@@ -365,6 +375,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       defaultStartTime: start,
       defaultEndTime: end,
       defaultDeadline: day,
+      ...scrollAnchor(point?.clientX, point?.clientY),
     });
     if (document.activeElement) document.activeElement.blur();
   }
@@ -500,7 +511,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         ? snapCreatePoint(minutesFromClientY(ev.clientY))
         : current.originMinutes;
       const range = rangeFromCreateDrag(current.originMinutes, point);
-      openCondensedCreate(current.colIdx, range.startMinutes, range.endMinutes);
+      openCondensedCreate(current.colIdx, range.startMinutes, range.endMinutes, ev);
     }
 
     function onUp(ev) {
@@ -558,7 +569,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     if (condensedWeek) {
       const point = snapCreatePoint(minutesFromClientY(e.clientY));
       const range = rangeFromCreateDrag(point, point);
-      openCondensedCreate(colIdx, range.startMinutes, range.endMinutes);
+      openCondensedCreate(colIdx, range.startMinutes, range.endMinutes, e);
       return;
     }
 
@@ -622,7 +633,8 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       flippedY: chosenFlip.flippedY, 
       defaultStartTime, 
       defaultEndTime, 
-      defaultDeadline 
+      defaultDeadline,
+      ...scrollAnchor(e.clientX, e.clientY),
     });
     if (document.activeElement) document.activeElement.blur();
   }
@@ -1739,6 +1751,15 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         />
 
 
+
+        {(condensedWeek || isDrawerChrome) && cardPos?.anchorX != null && (
+          <div
+            className="plus-circle"
+            style={{ left: cardPos.anchorX - 18, top: cardPos.anchorY - 18, zIndex: 101, pointerEvents: 'none' }}
+          >
+            <span className="plus-sign">+</span>
+          </div>
+        )}
 
         {condensedWeek && (() => {
           const gestureRange = createGesture?.armed
@@ -3051,6 +3072,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
           <TaskForm
             key={cardKey}
             variant="day"
+            eventOnly
             addTask={(task) => {
               if (task?.startTime && task?.endTime && task.startTime === task.endTime) return;
               if (onAdd) onAdd(task);
@@ -3067,6 +3089,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         <CreateSheet open onClose={() => setCardPos(null)}>
           <TaskCreationCard
             key={cardKey}
+            eventOnly
             showPlusCircle={false}
             onCancel={() => setCardPos(null)}
             onAdd={(task) => {
@@ -3102,6 +3125,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
 
         <TaskCreationCard
           key={cardKey}
+          eventOnly
           onCancel={() => {
             setCardPos(null);
           }}
