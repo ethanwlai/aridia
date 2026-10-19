@@ -184,6 +184,7 @@ export default function DayAgenda({
         <div className="day-agenda-create-panel">
           <TaskForm
             variant="day"
+            eventOnly
             addTask={onAdd}
             defaultStartTime={createSession.start}
             defaultEndTime={createSession.end}
@@ -225,6 +226,7 @@ export default function DayAgenda({
       {showCreate && (isDrawerChrome ? (
         <CreateSheet open onClose={() => setShowCreate(false)}>
             <TaskCreationCard
+              eventOnly
               showPlusCircle={false}
               onCancel={() => setShowCreate(false)}
               onAdd={(task) => {
@@ -249,6 +251,7 @@ export default function DayAgenda({
         <div className="day-agenda-create-overlay" onClick={() => setShowCreate(false)}>
           <div className="day-agenda-create-card" onClick={(e) => e.stopPropagation()}>
             <TaskCreationCard
+              eventOnly
               showPlusCircle={false}
               onCancel={() => setShowCreate(false)}
               onAdd={(task) => {

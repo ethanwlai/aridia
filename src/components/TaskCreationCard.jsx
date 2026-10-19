@@ -1721,7 +1721,7 @@ const CircularDurationPicker = ({ value, onChange, onClose, anchorRef, open }) =
   return ReactDOM.createPortal(picker, document.body);
 };
 
-const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClose, onTimePickerClose, defaultStartTime, defaultEndTime, defaultDeadline, editingTask, onUpdate, showPlusCircle = true, onTimesChange }) => {
+const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClose, onTimePickerClose, defaultStartTime, defaultEndTime, defaultDeadline, editingTask, onUpdate, showPlusCircle = true, onTimesChange, eventOnly = false }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState(defaultDeadline || null);
@@ -1801,7 +1801,7 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
       setPriority(editingTask.priority || 3);
       setEnergy(editingTask.energy || 3);
       setTaskDuration(editingTask.duration || 30);
-      setCreationType(editingTask.type || 'task');
+      setCreationType(eventOnly ? 'event' : (editingTask.type || 'task'));
       
       // Set task type
       if (editingTask.taskType) {
@@ -1835,7 +1835,7 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
         }
       }
     }
-  }, [editingTask, taskTypes]);
+  }, [editingTask, taskTypes, eventOnly]);
 
   // Close dropdown if clicked outside
   React.useEffect(() => {
@@ -2234,7 +2234,7 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
         </div>
       )}
       <div className="card-content">
-        {/* Event/Task Toggle */}
+        {/* Event/Task Toggle. Calendar create shows a fixed Event pill. */}
         <div style={{
           position: 'absolute',
           top: '2rem',
@@ -2248,12 +2248,19 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
           zIndex: 20
         }}>
           <button
-            className={`creation-type-btn${creationType === 'event' ? ' is-selected' : ''}`}
-            onClick={() => { setCreationType('event'); setShowTimePicker(false); setShowDurationPicker(false); }}
+            className={`creation-type-btn${eventOnly || creationType === 'event' ? ' is-selected' : ''}`}
+            aria-disabled={eventOnly || undefined}
+            onClick={() => {
+              if (eventOnly) return;
+              setCreationType('event');
+              setShowTimePicker(false);
+              setShowDurationPicker(false);
+            }}
             tabIndex={-1}
           >
             Event
           </button>
+          {!eventOnly && (
           <button
             className={`creation-type-btn${creationType === 'task' ? ' is-selected' : ''}`}
             onClick={() => { setCreationType('task'); setShowTimePicker(false); setShowDurationPicker(false); }}
@@ -2261,6 +2268,7 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
           >
             Task
           </button>
+          )}
         </div>
         <div className="task-title-row" style={{display: 'flex', alignItems: 'center', width: '100%', minWidth: 0, marginBottom: '0.2rem', position: 'relative', overflow: 'visible'}}>
           <div
