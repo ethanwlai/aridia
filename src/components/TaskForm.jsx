@@ -1752,7 +1752,8 @@ const TaskForm = ({
               {creationType === 'task' ? 'Task' : 'Event'} Creation
             </div>
             
-            {/* Event/Task Toggle. Calendar create shows a fixed Event pill. */}
+            {/* Event/Task Toggle. Calendar create is event-only and shows no pill. */}
+            {!eventOnly && (
             <div style={{
               display: 'flex',
               flexShrink: 0,
@@ -1761,7 +1762,6 @@ const TaskForm = ({
               padding: '0.1rem',
               border: `1px solid ${ui.toggleBorder}`
             }}>
-              {!eventOnly && (
               <button
                 type="button"
                 className={`creation-type-btn${creationType === 'task' ? ' is-selected' : ''}`}
@@ -1769,13 +1769,10 @@ const TaskForm = ({
               >
                 Task
               </button>
-              )}
               <button
                 type="button"
-                className={`creation-type-btn${eventOnly || creationType === 'event' ? ' is-selected' : ''}`}
-                aria-disabled={eventOnly || undefined}
+                className={`creation-type-btn${creationType === 'event' ? ' is-selected' : ''}`}
                 onClick={() => {
-                  if (eventOnly) return;
                   setCreationType('event');
                   setShowTimePicker(false);
                 }}
@@ -1783,6 +1780,7 @@ const TaskForm = ({
                 Event
               </button>
             </div>
+            )}
           </div>
           {creationType === 'event' ? (
             // Event creation: side by side layout

@@ -2234,7 +2234,8 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
         </div>
       )}
       <div className="card-content">
-        {/* Event/Task Toggle. Calendar create shows a fixed Event pill. */}
+        {/* Event/Task Toggle. Calendar create is event-only and shows no pill. */}
+        {!eventOnly && (
         <div style={{
           position: 'absolute',
           top: '2rem',
@@ -2248,10 +2249,8 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
           zIndex: 20
         }}>
           <button
-            className={`creation-type-btn${eventOnly || creationType === 'event' ? ' is-selected' : ''}`}
-            aria-disabled={eventOnly || undefined}
+            className={`creation-type-btn${creationType === 'event' ? ' is-selected' : ''}`}
             onClick={() => {
-              if (eventOnly) return;
               setCreationType('event');
               setShowTimePicker(false);
               setShowDurationPicker(false);
@@ -2260,7 +2259,6 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
           >
             Event
           </button>
-          {!eventOnly && (
           <button
             className={`creation-type-btn${creationType === 'task' ? ' is-selected' : ''}`}
             onClick={() => { setCreationType('task'); setShowTimePicker(false); setShowDurationPicker(false); }}
@@ -2268,8 +2266,8 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
           >
             Task
           </button>
-          )}
         </div>
+        )}
         <div className="task-title-row" style={{display: 'flex', alignItems: 'center', width: '100%', minWidth: 0, marginBottom: '0.2rem', position: 'relative', overflow: 'visible'}}>
           <div
             className="tasktype-badge tasktype-pill-dropdown"
