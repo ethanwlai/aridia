@@ -2227,7 +2227,7 @@ const TaskCreationCard = ({ onAdd, onCancel, flippedX, flippedY, onDatePickerClo
   }, [closeDatePicker, closeTimePicker, onDatePickerClose, onTimePickerClose]);
 
   return (
-    <div ref={cardRef} className={`task-creation-card${flippedX ? ' flipped-x' : ''}${flippedY ? ' flipped-y' : ''}`} style={{overflow: 'visible'}}>
+    <div ref={cardRef} className={`task-creation-card${eventOnly ? ' is-event-only' : ''}${flippedX ? ' flipped-x' : ''}${flippedY ? ' flipped-y' : ''}`} style={{overflow: 'visible'}}>
       {showPlusCircle && (
         <div className="plus-circle">
           <span className="plus-sign">+</span>

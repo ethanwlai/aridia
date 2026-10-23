@@ -74,6 +74,10 @@
   align-items: flex-start;
 }
 
+.task-creation-card.is-event-only {
+  width: min(400px, calc(100vw - 32px));
+}
+
 .task-title-row {
   min-width: 0;
 }

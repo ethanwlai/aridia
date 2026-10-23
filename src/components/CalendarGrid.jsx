@@ -299,7 +299,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     const grid = gridRef.current;
     if (!grid) return false;
     const gridRect = grid.getBoundingClientRect();
-    const cardWidthPx = 420;
+    const cardWidthPx = 400;
     const cardHeightPx = 240;
     const flipOptions = [
       { flippedX: false, flippedY: false },
@@ -603,7 +603,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     const yOffsetFlipped = 45;
     const x = e.clientX - scrollRect.left + xOffset;
     const y = e.clientY - scrollRect.top + yOffsetNormal;
-    const cardWidthPx = 420;
+    const cardWidthPx = 400;
     const cardHeightPx = 240;
     let chosenFlip = { flippedX: false, flippedY: false };
     let chosenPos = { x, y };
@@ -3116,7 +3116,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         style={{
           position: 'absolute',
           display: cardPos ? 'block' : 'none',
-          left: cardPos ? (cardPos.flippedX ? cardPos.x - 430 : cardPos.x) : 0,
+          left: cardPos ? (cardPos.flippedX ? cardPos.x - 400 : cardPos.x) : 0,
           top: cardPos ? cardPos.y : 0,
           zIndex: 100,
           transform: cardPos?.flippedY ? 'translateY(-240px)' : 'none',

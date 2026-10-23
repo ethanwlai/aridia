@@ -1708,7 +1708,7 @@ const TaskForm = ({
       width: isDay ? '100%' : undefined,
       minWidth: isDay ? 0 : undefined,
       minHeight: isDay ? 0 : undefined,
-      height: isDay ? '100%' : undefined,
+      height: isDay ? 'auto' : undefined,
       boxSizing: 'border-box',
     }}>
       <style>
@@ -1925,7 +1925,7 @@ const TaskForm = ({
           {/* Task Type Dropdown */}
           <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '150px' }}>
             <label style={{
-              marginBottom: '0.25rem',
+              marginBottom: isDay ? '0.15rem' : '0.25rem',
               fontSize: '0.9rem',
               fontWeight: 600,
               color: ui.label,
@@ -1948,7 +1948,7 @@ const TaskForm = ({
                 fontFamily: "'Karla', sans-serif",
                 outline: 'none',
                 transition: 'border-color 0.2s ease',
-                marginTop: '0.25rem'
+                marginTop: isDay ? '0.15rem' : '0.25rem'
               }}
             >
               <option value="Work">Work</option>
@@ -1961,7 +1961,7 @@ const TaskForm = ({
           {/* Deadline Input with DatePicker */}
           <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? { position: 'relative' } : { flex: '1', minWidth: '150px', position: 'relative' }}>
             <label style={{
-              marginBottom: '0.25rem',
+              marginBottom: isDay ? '0.15rem' : '0.25rem',
               fontSize: '0.9rem',
               fontWeight: 600,
               color: ui.label,
@@ -1969,7 +1969,7 @@ const TaskForm = ({
             }}>
               Deadline
             </label>
-            <div style={{ marginTop: '0.25rem', position: 'relative' }}>
+            <div style={{ marginTop: isDay ? '0.15rem' : '0.25rem', position: 'relative' }}>
               <div style={{ position: 'relative', display: 'block', width: '100%' }}>
               <DatePicker
                 ref={datePickerRef}
@@ -2070,7 +2070,7 @@ const TaskForm = ({
                 fontSize: '0.9rem',
                 fontWeight: 600,
                 color: ui.label,
-                marginBottom: '0.25rem',
+                marginBottom: isDay ? '0.15rem' : '0.25rem',
                 display: 'flex',
                 gap: '1rem'
               }}>
@@ -2170,7 +2170,7 @@ const TaskForm = ({
           ) : (
           <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '150px' }}>
             <label style={{
-              marginBottom: '0.25rem',
+              marginBottom: isDay ? '0.15rem' : '0.25rem',
               fontSize: '0.9rem',
               fontWeight: 600,
               color: ui.label,
@@ -2178,7 +2178,7 @@ const TaskForm = ({
             }}>
               Duration (minutes)
             </label>
-            <div style={{ position: 'relative', marginTop: '0.25rem' }}>
+            <div style={{ position: 'relative', marginTop: isDay ? '0.15rem' : '0.25rem' }}>
               <input
                 type="text"
                 value={duration}
@@ -2258,7 +2258,7 @@ const TaskForm = ({
           {/* Energy Level */}
           <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '200px' }}>
             <label style={{
-              marginBottom: '0.25rem',
+              marginBottom: isDay ? '0.15rem' : '0.25rem',
               fontSize: '0.9rem',
               fontWeight: 600,
               color: ui.label,
@@ -2267,7 +2267,7 @@ const TaskForm = ({
               Energy Level
             </label>
             <div 
-              style={{ position: 'relative', padding: '0.5rem 0', marginTop: '0.25rem' }}
+              style={{ position: 'relative', padding: '0.5rem 0', marginTop: isDay ? '0.15rem' : '0.25rem' }}
               onMouseMove={handleEnergyMouseMove}
               onMouseUp={handleEnergyMouseUp}
               onMouseLeave={handleEnergyMouseUp}
@@ -2313,7 +2313,7 @@ const TaskForm = ({
           {/* Priority Level */}
           <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '200px' }}>
             <label style={{
-              marginBottom: '0.25rem',
+              marginBottom: isDay ? '0.15rem' : '0.25rem',
               fontSize: '0.9rem',
               fontWeight: 600,
               color: ui.label,
@@ -2322,7 +2322,7 @@ const TaskForm = ({
               Priority Level
             </label>
             <div 
-              style={{ position: 'relative', padding: '0.5rem 0', marginTop: '0.25rem' }}
+              style={{ position: 'relative', padding: '0.5rem 0', marginTop: isDay ? '0.15rem' : '0.25rem' }}
               onMouseMove={handlePriorityMouseMove}
               onMouseUp={handlePriorityMouseUp}
               onMouseLeave={handlePriorityMouseUp}
