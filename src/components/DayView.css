@@ -343,7 +343,7 @@
 }
 
 .day-agenda-create-panel > * {
-  flex: 1;
+  flex: 0 0 auto;
   min-width: 0;
   min-height: 0;
 }
