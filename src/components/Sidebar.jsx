@@ -27,7 +27,7 @@ function isTaskCurrent(task) {
   return now >= start && now <= end;
 }
 
-const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick, highlightedItem, onHighlightItem, onAutoSchedule, onQuickMove, onExtendDuration, onEdit, allowCalendarDrag = true, pinTodayToken = 0, viewMode = 'week' }) => {
+const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick, highlightedItem, onHighlightItem, onAutoSchedule, onQuickMove, onExtendDuration, onEdit, allowCalendarDrag = true, pinTodayToken = 0, freezeAgendaToken = 0, viewMode = 'week' }) => {
   // Weather state
   const [coords, setCoords] = useState(null);
   const [weather, setWeather] = useState({}); // { [dateStr]: { high, low, icon, description } }
@@ -386,6 +386,11 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
     scrollAgendaToToday();
     suppressCenterScrollRef.current = pinTodayToken;
   }, [pinTodayToken]);
+
+  useLayoutEffect(() => {
+    if (!freezeAgendaToken) return;
+    suppressCenterScrollRef.current = freezeAgendaToken;
+  }, [freezeAgendaToken]);
   const prevDatesWithTasksRef = useRef(new Set());
 
   const expandDay = useCallback((dateStr) => {

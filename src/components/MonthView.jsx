@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { addMonths, format } from 'date-fns';
 import CalendarViewNav from './CalendarViewNav';
 import MonthCalendarGrid from './MonthCalendarGrid';
@@ -57,6 +57,23 @@ export default function MonthView({
     onDayClick?.(date);
     scrolledLocateRef.current = locateKey;
   }, [locateToken, highlightedItem, monthDate, tasks, itemsByDate, maxChips, onDayClick]);
+
+  const shownYear = monthDate.getFullYear();
+  const shownMonth = monthDate.getMonth();
+  useLayoutEffect(() => {
+    const container = bodyRef.current;
+    if (!container) return;
+    const dayNumber = new Date().getDate();
+    const lastDay = new Date(shownYear, shownMonth + 1, 0).getDate();
+    const target = startOfDay(new Date(shownYear, shownMonth, Math.min(dayNumber, lastDay)));
+    const el = container.querySelector(`.mcg-day.in-month[data-date="${formatDateKey(target)}"]`);
+    if (!el) return;
+    const containerRect = container.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const delta = (elRect.top + elRect.height / 2) - (containerRect.top + containerRect.height / 2);
+    const max = Math.max(0, container.scrollHeight - container.clientHeight);
+    container.scrollTop = Math.max(0, Math.min(max, container.scrollTop + delta));
+  }, [shownYear, shownMonth]);
 
   const goToday = () => setCenterDay(today);
   const goPrev = () => setCenterDay(addMonths(startOfDay(centerDay), -1));
