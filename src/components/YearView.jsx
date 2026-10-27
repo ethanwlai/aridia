@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { addYears } from 'date-fns';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import CalendarViewNav from './CalendarViewNav';
 import MonthCalendarGrid from './MonthCalendarGrid';
-import { buildItemsByDate, formatDateKey, isCalendarHighlighted, parseDateKey, scrollHighlightedIntoView, startOfDay } from '../utils/calendarItems';
+import { buildItemsByDate, formatDateKey, isCalendarHighlighted, parseDateKey, sameMonthDayInYear, scrollHighlightedIntoView, startOfDay } from '../utils/calendarItems';
 import './OverviewViews.css';
 
 export default function YearView({
@@ -43,9 +42,17 @@ export default function YearView({
     if (scrolled) scrolledLocateRef.current = locateKey;
   }, [locateToken, highlightedItem, year, tasks, months]);
 
+  useLayoutEffect(() => {
+    const target = sameMonthDayInYear(year, new Date());
+    scrollHighlightedIntoView(
+      bodyRef.current,
+      `.mcg-day.in-month[data-date="${formatDateKey(target)}"]`
+    );
+  }, [year]);
+
   const goToday = () => setCenterDay(today);
-  const goPrev = () => setCenterDay(addYears(startOfDay(centerDay), -1));
-  const goNext = () => setCenterDay(addYears(startOfDay(centerDay), 1));
+  const goPrev = () => setCenterDay(sameMonthDayInYear(year - 1, new Date()));
+  const goNext = () => setCenterDay(sameMonthDayInYear(year + 1, new Date()));
 
   return (
     <div className="year-view">

@@ -18,7 +18,7 @@ import { useLayoutMode, getLayoutMode } from './hooks/useLayoutMode';
 import useDrawerEdgeSwipe from './hooks/useDrawerEdgeSwipe';
 import { useAuth } from './context/AuthContext';
 import { sortEventsByDeadline, sortTasks } from './utils/taskSorter';
-import { isItemScheduled, isSameDate, startOfDay } from './utils/calendarItems';
+import { isItemScheduled, isSameDate, sameMonthDayInYear, startOfDay } from './utils/calendarItems';
 import {
   PENDING_AUTH_KEY,
   clearLocalTasks,
@@ -119,6 +119,7 @@ const App = () => {
   const [drawerDragging, setDrawerDragging] = useState(false);
   const drawerOverlayRef = useRef(null);
   const [pinTodayToken, setPinTodayToken] = useState(0);
+  const [freezeAgendaToken, setFreezeAgendaToken] = useState(0);
   const [chevronHover, setChevronHover] = useState(false);
   const [selectedDashboardButton, setSelectedDashboardButton] = useState(null);
   const [chevronVisible, setChevronVisible] = useState(true);
@@ -525,12 +526,27 @@ const App = () => {
     }, 400); // Slightly longer for better visual effect
   }, []);
 
+  const navigateMonth = useCallback((targetDate) => {
+    const next = startOfDay(targetDate);
+    if (!isSameDate(centerDayRef.current, next)) {
+      setFreezeAgendaToken((n) => n + 1);
+    }
+    smoothNavigateTo(targetDate);
+  }, [smoothNavigateTo]);
+
   const handleSetViewMode = useCallback((mode) => {
     setPanelDate(null);
     setHighlightedItem(null);
     setListFocus(null);
+    if (mode !== viewMode && (mode === 'day' || mode === 'week' || mode === 'month')) {
+      const target = sameMonthDayInYear(centerDayRef.current.getFullYear(), new Date());
+      if (!isSameDate(centerDayRef.current, target)) {
+        setFreezeAgendaToken((n) => n + 1);
+        setCenterDay(target);
+      }
+    }
     setViewMode(mode);
-  }, []);
+  }, [viewMode]);
 
   const prefersReducedMotion = () =>
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1091,6 +1107,8 @@ const App = () => {
           searchResults={searchResults}
           allowCalendarDrag={!isDrawerChrome}
           pinTodayToken={pinTodayToken}
+          freezeAgendaToken={freezeAgendaToken}
+          viewMode={viewMode}
         />
               {/* Dashboard panel with Aridia Classic */}
               <div
@@ -1508,7 +1526,7 @@ const App = () => {
                   ) : (
                     <MonthView
                       centerDay={centerDay}
-                      setCenterDay={smoothNavigateTo}
+                      setCenterDay={navigateMonth}
                       tasks={tasks}
                       panelDate={panelDate}
                       onDayClick={setPanelDate}

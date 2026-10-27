@@ -27,6 +27,12 @@ export function startOfDay(date) {
   return next;
 }
 
+export function sameMonthDayInYear(year, source) {
+  const month = source.getMonth();
+  const day = Math.min(source.getDate(), new Date(year, month + 1, 0).getDate());
+  return startOfDay(new Date(year, month, day));
+}
+
 export function isSameDate(a, b) {
   if (!a || !b) return false;
   return a.getFullYear() === b.getFullYear()
