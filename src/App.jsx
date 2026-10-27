@@ -1091,6 +1091,7 @@ const App = () => {
           searchResults={searchResults}
           allowCalendarDrag={!isDrawerChrome}
           pinTodayToken={pinTodayToken}
+          viewMode={viewMode}
         />
               {/* Dashboard panel with Aridia Classic */}
               <div

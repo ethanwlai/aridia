@@ -27,7 +27,7 @@ function isTaskCurrent(task) {
   return now >= start && now <= end;
 }
 
-const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick, highlightedItem, onHighlightItem, onAutoSchedule, onQuickMove, onExtendDuration, onEdit, allowCalendarDrag = true, pinTodayToken = 0 }) => {
+const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick, highlightedItem, onHighlightItem, onAutoSchedule, onQuickMove, onExtendDuration, onEdit, allowCalendarDrag = true, pinTodayToken = 0, viewMode = 'week' }) => {
   // Weather state
   const [coords, setCoords] = useState(null);
   const [weather, setWeather] = useState({}); // { [dateStr]: { high, low, icon, description } }
@@ -368,6 +368,8 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
   const sidebarContentRef = useRef(null);
   const hasSyncedCenterDayRef = useRef(false);
   const suppressCenterScrollRef = useRef(0);
+  const viewModeRef = useRef(viewMode);
+  viewModeRef.current = viewMode;
 
   const scrollAgendaToToday = () => {
     const container = sidebarContentRef.current;
@@ -430,6 +432,10 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
       return;
     }
     if (highlightedItem) return;
+    // Year navigation moves centerDay by a full year, outside the agenda's
+    // rendered range. Read the mode from a ref so switching views does not
+    // re-run this effect and scroll on its own.
+    if (viewModeRef.current === 'year') return;
     if (sidebarContentRef.current && centerDay) {
       // Calculate the leftmost day of the current calendar week (centerDay - 2)
       const leftmostDay = new Date(centerDay);
