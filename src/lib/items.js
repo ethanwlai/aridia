@@ -40,6 +40,18 @@ export function loadLocalTasks() {
   }
 }
 
+/** Items actually written to this device. Does not include the unsaved demo seed. */
+export function loadSavedLocalTasks() {
+  try {
+    const saved = localStorage.getItem(TASKS_STORAGE_KEY);
+    if (!saved) return [];
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function saveLocalTasks(tasks) {
   localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
 }
@@ -74,9 +86,9 @@ export function clearPendingAuth() {
   }
 }
 
-export function toRow(item, userId) {
+export function toRow(item, userId, { newId = false } = {}) {
   return {
-    id: isUuid(item.id) ? item.id : newItemId(),
+    id: !newId && isUuid(item.id) ? item.id : newItemId(),
     user_id: userId,
     title: item.title || item.name || 'Untitled',
     description: emptyToNull(item.description),
@@ -115,11 +127,12 @@ export function fromRow(row) {
   };
 }
 
-export async function fetchCloudItems() {
-  if (!supabase) return [];
+export async function fetchCloudItems(userId) {
+  if (!supabase || !userId) return [];
   const { data, error } = await supabase
     .from('items')
     .select('*')
+    .eq('user_id', userId)
     .order('created_at', { ascending: true });
   if (error) throw error;
   return (data || []).map(fromRow);
@@ -143,25 +156,27 @@ export async function updateCloudItem(item, userId) {
     .from('items')
     .update(row)
     .eq('id', row.id)
+    .eq('user_id', userId)
     .select()
     .single();
   if (error) throw error;
   return fromRow(data);
 }
 
-export async function deleteCloudItem(itemId) {
-  if (!supabase) return;
+export async function deleteCloudItem(itemId, userId) {
+  if (!supabase || !userId) return;
   if (!isUuid(itemId)) return;
-  const { error } = await supabase.from('items').delete().eq('id', itemId);
+  const { error } = await supabase
+    .from('items')
+    .delete()
+    .eq('id', itemId)
+    .eq('user_id', userId);
   if (error) throw error;
 }
 
 export async function uploadLocalItems(items, userId) {
-  if (!supabase || !items.length) return items.map((item) => ({
-    ...item,
-    id: isUuid(item.id) ? item.id : newItemId(),
-  }));
-  const rows = items.map((item) => toRow(item, userId));
+  const rows = items.map((item) => toRow(item, userId, { newId: true }));
+  if (!supabase || !rows.length) return rows.map((row) => fromRow(row));
   const { data, error } = await supabase.from('items').insert(rows).select();
   if (error) throw error;
   return (data || []).map(fromRow);

@@ -79,10 +79,15 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    clearGuestSession();
-    if (!supabase) return;
-    const { error } = await supabase.auth.signOut();
+    if (!supabase) {
+      clearGuestSession();
+      clearPendingAuth();
+      return;
+    }
+    const { error } = await supabase.auth.signOut({ scope: 'global' });
     if (error) throw error;
+    clearGuestSession();
+    clearPendingAuth();
   }, []);
 
   const value = useMemo(() => ({
