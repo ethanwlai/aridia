@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { format } from 'date-fns';
-import { formatDateKey, getCalendarHighlightOpacity, getItemColor, getItemTitle, getMonthCells, isCalendarHighlighted, isSameDate, toggleCalendarHighlight } from '../utils/calendarItems';
+import { formatDateKey, getItemColor, getItemTitle, getMonthCells, isCalendarHighlighted, isSameDate, sameCalendarItemId } from '../utils/calendarItems';
 import './OverviewViews.css';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -71,8 +71,19 @@ export default function MonthCalendarGrid({
           const items = itemsByDate[key] || [];
           const isToday = today && isSameDate(date, today);
           const isSelected = selectedDate && isSameDate(date, selectedDate);
-          const isLocated = isCompact && inMonth && items.some((item) => isCalendarHighlighted(highlightedItem, item));
-          const extraCount = Math.max(0, items.length - maxChips);
+          const matchesSelection = (item) => (
+            isCompact
+              ? isCalendarHighlighted(highlightedItem, item)
+              : sameCalendarItemId(highlightedItem, item)
+          );
+          const isLocated = inMonth && items.some(matchesSelection);
+          const locatedIndex = items.findIndex(matchesSelection);
+          let visibleItems = items.slice(0, maxChips);
+          if (!isCompact && locatedIndex >= maxChips) {
+            const keep = Math.max(0, maxChips - 1);
+            visibleItems = [...items.slice(0, keep), items[locatedIndex]];
+          }
+          const extraCount = Math.max(0, items.length - visibleItems.length);
 
           return (
             <div
@@ -97,26 +108,31 @@ export default function MonthCalendarGrid({
                 items.length > 0 && inMonth ? <span className="mcg-busy-dot" /> : null
               ) : (
                 <div className="mcg-chips">
-                  {items.slice(0, maxChips).map((item) => (
+                  {visibleItems.map((item) => {
+                    const chipSelected = sameCalendarItemId(highlightedItem, item);
+                    return (
                     <div
                       key={item.id || `${getItemTitle(item)}-${item.startTime || ''}`}
                       className="mcg-chip"
                       data-task-id={item.id}
                       style={{
                         background: getItemColor(item),
-                        opacity: getCalendarHighlightOpacity(highlightedItem, item),
+                        opacity: !highlightedItem || chipSelected ? 1 : 0.2,
                       }}
                       title={getItemTitle(item)}
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         clearClickTimer();
-                        toggleCalendarHighlight(highlightedItem, onHighlightItem, item);
+                        if (!onHighlightItem) return;
+                        if (chipSelected) onHighlightItem(null);
+                        else onHighlightItem({ id: item.id, type: item.type });
                       }}
                     >
                       <span className="mcg-chip-label">{getItemTitle(item)}</span>
                     </div>
-                  ))}
+                    );
+                  })}
                   {extraCount > 0 && (
                     <button
                       type="button"

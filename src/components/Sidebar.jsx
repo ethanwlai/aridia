@@ -14,6 +14,20 @@ function parseLocalDate(dateStr) {
   return new Date(year, month - 1, day);
 }
 
+const SIDEBAR_ACTION_SELECTOR = '.task-delete-btn, .task-complete-btn, .task-edit-btn, .task-actions-dropdown-trigger';
+
+function isSidebarActionTarget(target) {
+  return Boolean(target?.closest?.(SIDEBAR_ACTION_SELECTOR));
+}
+
+function closeOpenSidebarDropdown() {
+  if (window.openDropdownRef && window.openDropdownRef.current) {
+    window.openDropdownRef.current.setIsOpen(false);
+    window.openDropdownRef.current.setActiveSubmenu(null);
+    window.openDropdownRef.current = null;
+  }
+}
+
 // Helper: check if a task is currently happening
 function isTaskCurrent(task) {
   if (!task.startTime || !task.endTime) return false;
@@ -27,7 +41,7 @@ function isTaskCurrent(task) {
   return now >= start && now <= end;
 }
 
-const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick, highlightedItem, onHighlightItem, onAutoSchedule, onQuickMove, onExtendDuration, onEdit, allowCalendarDrag = true, pinTodayToken = 0, freezeAgendaToken = 0, viewMode = 'week' }) => {
+const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick, highlightedItem, onAutoSchedule, onQuickMove, onExtendDuration, onEdit, allowCalendarDrag = true, pinTodayToken = 0, freezeAgendaToken = 0, viewMode = 'week' }) => {
   // Weather state
   const [coords, setCoords] = useState(null);
   const [weather, setWeather] = useState({}); // { [dateStr]: { high, low, icon, description } }
@@ -615,36 +629,23 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
                             window.globalDragState.suppressClick = false;
                             return;
                           }
-                          // Don't trigger if clicking on buttons
-                          if (e.target.closest('.task-delete-btn') || e.target.closest('.task-complete-btn') || e.target.closest('.task-edit-btn') || e.target.closest('.task-actions-dropdown-trigger')) {
-                            return;
-                          }
-                          
-                          // Close any open dropdowns when clicking on sidebar task
-                          if (window.openDropdownRef && window.openDropdownRef.current) {
-                            window.openDropdownRef.current.setIsOpen(false);
-                            window.openDropdownRef.current.setActiveSubmenu(null);
-                            window.openDropdownRef.current = null;
-                          }
-                          
-                          // Handle highlighting
-                          if (onHighlightItem) {
-                            const isCurrentlyHighlighted = highlightedItem && highlightedItem.id === task.id && highlightedItem.type === task.type;
-                            if (isCurrentlyHighlighted) {
-                              // Toggle off highlighting
-                              onHighlightItem(null);
-                            } else {
-                              // Toggle on highlighting
-                              onHighlightItem({ id: task.id, type: task.type });
-                            }
-                          }
-                          
+                          if (isSidebarActionTarget(e.target)) return;
+
+                          closeOpenSidebarDropdown();
+
                           if (onItemClick) {
                             onItemClick({ id: task.id, type: task.type });
                           }
                         }}
 
                         onMouseDown={(e) => {
+                          if (viewMode === 'month') {
+                            if (isSidebarActionTarget(e.target)) return;
+                            e.stopPropagation();
+                            closeOpenSidebarDropdown();
+                            onItemClick?.({ id: task.id, type: task.type });
+                            return;
+                          }
                           if (!allowCalendarDrag) return;
                           // Start custom drag for sidebar tasks and events
                           e.preventDefault();

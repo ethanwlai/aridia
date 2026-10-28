@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { addMonths, format } from 'date-fns';
 import CalendarViewNav from './CalendarViewNav';
 import MonthCalendarGrid from './MonthCalendarGrid';
-import { buildItemsByDate, formatDateKey, highlightedTaskSelector, isCalendarHighlighted, parseDateKey, scrollHighlightedIntoView, startOfDay } from '../utils/calendarItems';
+import { buildItemsByDate, formatDateKey, highlightedTaskSelector, parseDateKey, sameCalendarItemId, scrollHighlightedIntoView, startOfDay } from '../utils/calendarItems';
 import './OverviewViews.css';
 
 export default function MonthView({
@@ -30,33 +30,30 @@ export default function MonthView({
   useEffect(() => {
     const locateKey = `${locateToken}:${monthDate.getFullYear()}-${monthDate.getMonth()}`;
     if (!locateToken || !highlightedItem || scrolledLocateRef.current === locateKey) return;
-    const task = tasks.find((item) => isCalendarHighlighted(highlightedItem, item));
+    const task = tasks.find((item) => sameCalendarItemId(highlightedItem, item));
     const date = parseDateKey(task?.deadline);
     if (!date) return;
     if (date.getFullYear() !== monthDate.getFullYear() || date.getMonth() !== monthDate.getMonth()) return;
     const dayItems = itemsByDate[formatDateKey(date)] || [];
-    const index = dayItems.findIndex((item) => isCalendarHighlighted(highlightedItem, item));
+    const index = dayItems.findIndex((item) => sameCalendarItemId(highlightedItem, item));
     if (index < 0) {
       scrolledLocateRef.current = locateKey;
       return;
     }
-    if (index < maxChips) {
-      const scrolled = scrollHighlightedIntoView(
-        bodyRef.current,
-        highlightedTaskSelector(highlightedItem.id),
-        { force: true }
-      );
-      if (scrolled) scrolledLocateRef.current = locateKey;
-      return;
-    }
-    scrollHighlightedIntoView(
+    const chipScrolled = scrollHighlightedIntoView(
       bodyRef.current,
-      `.mcg-day.in-month[data-date="${formatDateKey(date)}"]`,
+      highlightedTaskSelector(highlightedItem.id),
       { force: true }
     );
-    onDayClick?.(date);
+    if (!chipScrolled) {
+      scrollHighlightedIntoView(
+        bodyRef.current,
+        `.mcg-day.in-month[data-date="${formatDateKey(date)}"]`,
+        { force: true }
+      );
+    }
     scrolledLocateRef.current = locateKey;
-  }, [locateToken, highlightedItem, monthDate, tasks, itemsByDate, maxChips, onDayClick]);
+  }, [locateToken, highlightedItem, monthDate, tasks, itemsByDate]);
 
   const shownYear = monthDate.getFullYear();
   const shownMonth = monthDate.getMonth();

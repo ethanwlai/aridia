@@ -18,7 +18,7 @@ import { useLayoutMode, getLayoutMode } from './hooks/useLayoutMode';
 import useDrawerEdgeSwipe from './hooks/useDrawerEdgeSwipe';
 import { useAuth } from './context/AuthContext';
 import { sortEventsByDeadline, sortTasks } from './utils/taskSorter';
-import { isItemScheduled, isSameDate, sameMonthDayInYear, startOfDay } from './utils/calendarItems';
+import { isItemScheduled, isSameDate, sameCalendarItemId, sameMonthDayInYear, startOfDay } from './utils/calendarItems';
 import {
   PENDING_AUTH_KEY,
   clearLocalTasks,
@@ -892,6 +892,18 @@ const App = () => {
 
   const handleSidebarItemClick = (item) => {
     setListFocus(null);
+    if (viewMode === 'month') {
+      setHighlightedItem({ id: item.id, type: item.type });
+      setLocateToken((n) => n + 1);
+      const match = tasks.find((task) => sameCalendarItemId(item, task));
+      if (match?.deadline) {
+        const [year, month, day] = match.deadline.split('-').map(Number);
+        const taskDate = new Date(year, month - 1, day);
+        taskDate.setHours(0, 0, 0, 0);
+        navigateMonth(taskDate);
+      }
+      return;
+    }
     // Toggle highlighting - if clicking the same item, unhighlight it
     if (highlightedItem && highlightedItem.id === item.id && highlightedItem.type === item.type) {
       setHighlightedItem(null);

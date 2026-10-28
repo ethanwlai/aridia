@@ -296,6 +296,12 @@ export function getLanedBlockBounds(colLeft, colWidth, lane = 0, laneCount = 1, 
   return { left, width };
 }
 
+/** Month view selection: match by id only. Week and day still use isCalendarHighlighted. */
+export function sameCalendarItemId(highlightedItem, item) {
+  if (!highlightedItem || item == null || highlightedItem.id == null || item.id == null) return false;
+  return String(highlightedItem.id) === String(item.id);
+}
+
 /** Week View calendar highlight: match by id + type. */
 export function isCalendarHighlighted(highlightedItem, item) {
   if (!highlightedItem || item == null) return false;
