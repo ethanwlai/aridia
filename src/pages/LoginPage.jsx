@@ -1,15 +1,19 @@
 import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { isVerifiedUser } from '../lib/authErrors';
 import './AuthPages.css';
 
 export default function LoginPage() {
-  const { user, loading, configured, signIn, signInWithGoogle } = useAuth();
+  const { user, loading, configured, signIn, signInWithGoogle, resendConfirmation } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
+  const [canResend, setCanResend] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
 
   if (loading) {
     return (
@@ -21,21 +25,38 @@ export default function LoginPage() {
     );
   }
 
-  if (user) {
+  if (isVerifiedUser(user)) {
     return <Navigate to="/" replace />;
   }
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+    setInfo('');
+    setCanResend(false);
     setSubmitting(true);
     try {
       await signIn(email.trim(), password);
       navigate('/', { replace: true });
     } catch (err) {
+      setCanResend(err.code === 'email_not_confirmed');
       setError(err.message || 'Could not sign in.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setError('');
+    setInfo('');
+    setResending(true);
+    try {
+      await resendConfirmation(email.trim());
+      setInfo('Confirm your email to sign in.');
+    } catch (err) {
+      setError(err.message || 'Could not resend the verification email.');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -82,6 +103,12 @@ export default function LoginPage() {
             />
           </label>
           {error && <p className="auth-error">{error}</p>}
+          {info && <p className="auth-muted">{info}</p>}
+          {canResend && (
+            <button className="auth-secondary" type="button" onClick={handleResend} disabled={resending || submitting || !email.trim()}>
+              {resending ? 'Sending…' : 'Resend verification email'}
+            </button>
+          )}
           <button className="auth-primary" type="submit" disabled={submitting || !configured}>
             {submitting ? 'Signing in…' : 'Sign in'}
           </button>

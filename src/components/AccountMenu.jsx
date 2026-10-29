@@ -7,6 +7,7 @@ export default function AccountMenu() {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [signOutError, setSignOutError] = useState('');
   const wrapRef = useRef(null);
 
   useEffect(() => {
@@ -26,9 +27,15 @@ export default function AccountMenu() {
   const initial = (user.email || 'A').charAt(0).toUpperCase();
 
   const handleSignOut = async () => {
-    setOpen(false);
-    await signOut();
-    navigate('/');
+    setSignOutError('');
+    try {
+      await signOut();
+      setOpen(false);
+      navigate('/');
+    } catch (err) {
+      setSignOutError(err?.message || 'Could not sign out.');
+      setOpen(true);
+    }
   };
 
   return (
@@ -52,6 +59,7 @@ export default function AccountMenu() {
           <div className="account-dropdown-email">{label}</div>
           <Link role="menuitem" to="/account" onClick={() => setOpen(false)}>Account</Link>
           <button type="button" role="menuitem" onClick={handleSignOut}>Log out</button>
+          {signOutError && <p className="account-dropdown-error">{signOutError}</p>}
         </div>
       )}
     </div>

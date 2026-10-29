@@ -70,6 +70,14 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
+.account-dropdown-error {
+  margin: 0.15rem 0 0;
+  padding: 0.35rem 0.5rem 0.15rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: #ffb4b4;
+}
+
 .account-dropdown-email {
   font-size: 0.75rem;
   color: rgba(255, 255, 255, 0.65);

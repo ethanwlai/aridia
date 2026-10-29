@@ -22,11 +22,13 @@ import { isItemScheduled, isSameDate, sameCalendarItemId, sameMonthDayInYear, st
 import {
   PENDING_AUTH_KEY,
   clearLocalTasks,
+  clearPendingAuth,
   deleteCloudItem,
   fetchCloudItems,
   insertCloudItem,
   isUuid,
   loadLocalTasks,
+  loadSavedLocalTasks,
   newItemId,
   replaceCloudWithLocal,
   saveLocalTasks,
@@ -179,40 +181,30 @@ const App = () => {
         }
 
         const pending = sessionStorage.getItem(PENDING_AUTH_KEY);
-        const cloud = await fetchCloudItems();
+        const cloud = await fetchCloudItems(userId);
         if (cancelled) return;
-        const local = loadLocalTasks();
+        const local = loadSavedLocalTasks();
 
-        if (!pending) {
-          setTasks(cloud);
+        if (cloud.length === 0 && local.length > 0) {
+          const uploaded = await uploadLocalItems(local, userId);
+          if (cancelled) return;
+          clearLocalTasks();
+          clearPendingAuth();
+          setTasks(uploaded);
           setHydratedUserId(userId);
           return;
         }
 
-        if (cloud.length === 0) {
-          if (local.length > 0) {
-            const uploaded = await uploadLocalItems(local, userId);
-            if (cancelled) return;
-            clearLocalTasks();
-            setTasks(uploaded);
-          } else {
-            setTasks([]);
-          }
-          sessionStorage.removeItem(PENDING_AUTH_KEY);
-          setHydratedUserId(userId);
-          return;
-        }
-
-        if (local.length === 0) {
+        if (!pending || local.length === 0) {
           setTasks(cloud);
-          sessionStorage.removeItem(PENDING_AUTH_KEY);
+          clearPendingAuth();
           setHydratedUserId(userId);
           return;
         }
 
         setTasks(cloud);
         setConflict({ localItems: local, cloudItems: cloud });
-        sessionStorage.removeItem(PENDING_AUTH_KEY);
+        clearPendingAuth();
         setHydratedUserId(userId);
       } catch (err) {
         if (cancelled) return;
@@ -254,7 +246,7 @@ const App = () => {
   const deleteTask = (taskId) => {
     setTasks((prev) => prev.filter(task => task.id !== taskId));
     if (userIdRef.current) {
-      deleteCloudItem(taskId).catch(reportSyncError);
+      deleteCloudItem(taskId, userIdRef.current).catch(reportSyncError);
     }
   };
 

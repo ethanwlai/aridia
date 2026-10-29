@@ -25,6 +25,11 @@ create index if not exists items_user_id_idx on public.items (user_id);
 create index if not exists items_user_deadline_idx on public.items (user_id, deadline);
 
 alter table public.items enable row level security;
+alter table public.items force row level security;
+
+revoke all on table public.items from public;
+revoke all on table public.items from anon;
+grant select, insert, update, delete on table public.items to authenticated;
 
 drop policy if exists "items_select_own" on public.items;
 create policy "items_select_own" on public.items
@@ -43,12 +48,20 @@ create policy "items_delete_own" on public.items
   for delete using (auth.uid() = user_id);
 
 create or replace function public.set_items_updated_at()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 begin
   new.updated_at = now();
   return new;
 end;
-$$ language plpgsql;
+$$;
+
+revoke all on function public.set_items_updated_at() from public;
+revoke all on function public.set_items_updated_at() from anon;
+revoke all on function public.set_items_updated_at() from authenticated;
 
 drop trigger if exists items_set_updated_at on public.items;
 create trigger items_set_updated_at

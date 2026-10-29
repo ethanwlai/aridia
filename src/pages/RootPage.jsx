@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import App from '../App';
 import { useAuth } from '../context/AuthContext';
+import { isVerifiedUser } from '../lib/authErrors';
 import { isGuestSession, setGuestSession, SHOW_LANDING_EVENT } from '../lib/guest';
 import LandingPage from './LandingPage';
 
@@ -38,14 +39,14 @@ export default function RootPage() {
     );
   }
 
-  if (!forceLanding && (user || guest)) {
+  if (!forceLanding && (isVerifiedUser(user) || guest)) {
     return <App />;
   }
 
   return (
     <LandingPage
       onContinueAsGuest={continueAsGuest}
-      onOpenCalendar={user ? openCalendar : undefined}
+      onOpenCalendar={isVerifiedUser(user) ? openCalendar : undefined}
     />
   );
 }
