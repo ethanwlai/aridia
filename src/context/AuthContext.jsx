@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { clearGuestSession } from '../lib/guest';
 import { clearPendingAuth, markPendingAuth } from '../lib/items';
+import { emailRedirectTo, toAuthError } from '../lib/authErrors';
 
 const AuthContext = createContext(null);
 
@@ -46,7 +47,7 @@ export function AuthProvider({ children }) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       clearPendingAuth();
-      throw error;
+      throw toAuthError(error, 'Could not sign in.');
     }
   }, []);
 
@@ -56,13 +57,33 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/` },
+      options: { emailRedirectTo: emailRedirectTo() },
     });
     if (error) {
       clearPendingAuth();
-      throw error;
+      throw toAuthError(error, 'Could not create an account.');
+    }
+    if (data?.session) {
+      await supabase.auth.signOut({ scope: 'global' });
+      clearGuestSession();
+      clearPendingAuth();
+      const configError = new Error(
+        'Email confirmation is turned off for this project. Turn Confirm email on in the Supabase dashboard, then create the account again.',
+      );
+      configError.code = 'confirmation_required';
+      throw configError;
     }
     return data;
+  }, []);
+
+  const resendConfirmation = useCallback(async (email) => {
+    if (!supabase) throw new Error('Authentication is not configured.');
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: { emailRedirectTo: emailRedirectTo() },
+    });
+    if (error) throw toAuthError(error, 'Could not resend the verification email.');
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
@@ -97,9 +118,10 @@ export function AuthProvider({ children }) {
     configured: isSupabaseConfigured,
     signIn,
     signUp,
+    resendConfirmation,
     signInWithGoogle,
     signOut,
-  }), [user, session, loading, signIn, signUp, signInWithGoogle, signOut]);
+  }), [user, session, loading, signIn, signUp, resendConfirmation, signInWithGoogle, signOut]);
 
   return (
     <AuthContext.Provider value={value}>
