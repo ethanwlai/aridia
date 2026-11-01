@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import aridiaLogo from '../assets/aridia-logo.png';
 import { requestShowLanding } from '../lib/guest';
+import AccountMenu from './AccountMenu';
 
 // ═══════════════════════════════════════════════════════════════
 // 🔧 ADJUSTABLE GAP SETTING - Change this number to adjust the gap!
@@ -694,6 +695,7 @@ const CalendarHeader = ({
       return (
         <div className={headerClass} ref={headerRef}>
           <div className="calendar-header-top">
+            <AccountMenu />
             {menuButton}
             {logoButton}
             {searchExpanded ? (
@@ -743,6 +745,7 @@ const CalendarHeader = ({
 
     return (
       <div className={headerClass} ref={headerRef}>
+        <AccountMenu />
         {menuButton}
         {logoButton}
         {viewControls}
