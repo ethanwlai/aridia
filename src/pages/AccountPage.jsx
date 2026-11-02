@@ -35,14 +35,16 @@ export default function AccountPage() {
           </div>
           <div>
             <span>Sign-in method</span>
-            <strong>{provider}</strong>
+            <strong>{provider === 'email' ? 'Email' : provider}</strong>
           </div>
         </div>
         {error && <p className="auth-error">{error}</p>}
-        <button className="auth-secondary" type="button" onClick={handleSignOut} disabled={signingOut}>
-          {signingOut ? 'Signing out…' : 'Log out'}
-        </button>
-        <Link className="auth-back" to="/">Back to calendar</Link>
+        <div className="auth-account-actions">
+          <button className="auth-secondary" type="button" onClick={handleSignOut} disabled={signingOut}>
+            {signingOut ? 'Signing out…' : 'Log out'}
+          </button>
+          <Link className="auth-back" to="/">Back to calendar</Link>
+        </div>
       </div>
     </div>
   );
