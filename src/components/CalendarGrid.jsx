@@ -30,6 +30,7 @@ const CREATE_HOLD_CANCEL_PX = 10;
 const CREATE_START_SNAP_MINUTES = 15;
 const CREATE_DRAG_THRESHOLD = 6;
 const CLICK_PREVIEW_MINUTES = 30;
+const CLICK_DELAY_MS = 250;
 
 function isVerticalScrollMove(dx, dy) {
   return Math.abs(dy) >= CREATE_HOLD_CANCEL_PX && Math.abs(dy) >= Math.abs(dx);
@@ -155,6 +156,8 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   const createGestureRef = useRef(null);
   const swallowCreateClickRef = useRef(false);
   const ignoreDoubleClickRef = useRef(false);
+  const pendingClickTimerRef = useRef(null);
+  const pendingClickSeqRef = useRef(0);
   const cardRef = useRef();
   const clickCardPlacedKey = useRef(null);
   const [cardWidth, setCardWidth] = useState(0);
@@ -409,7 +412,36 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     if (document.activeElement) document.activeElement.blur();
   }
 
+  function cancelPendingClickCreate() {
+    pendingClickSeqRef.current += 1;
+    if (pendingClickTimerRef.current != null) {
+      window.clearTimeout(pendingClickTimerRef.current);
+      pendingClickTimerRef.current = null;
+    }
+  }
+
+  function scheduleClickCreate(colIdx, startMinutes, endMinutes, day) {
+    cancelPendingClickCreate();
+    const seq = pendingClickSeqRef.current;
+    const { start, end } = datesForRange(day, startMinutes, endMinutes);
+    pendingClickTimerRef.current = window.setTimeout(() => {
+      if (pendingClickSeqRef.current !== seq) return;
+      pendingClickTimerRef.current = null;
+      if (swallowCreateClickRef.current || createGestureRef.current?.active) return;
+      placeClickCreateCard(colIdx, startMinutes, endMinutes, {
+        hidePlus: true,
+        colIdx,
+        startMinutes,
+        endMinutes,
+        defaultStartTime: start,
+        defaultEndTime: end,
+        defaultDeadline: day,
+      });
+    }, CLICK_DELAY_MS);
+  }
+
   function swallowCreateClick() {
+    cancelPendingClickCreate();
     swallowCreateClickRef.current = true;
     ignoreDoubleClickRef.current = true;
     window.setTimeout(() => {
@@ -594,6 +626,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       const dx = ev.clientX - current.originX;
       const dy = ev.clientY - current.originY;
       if (!current.active && Math.hypot(dx, dy) < CREATE_DRAG_THRESHOLD) return;
+      if (!current.active) cancelPendingClickCreate();
       if (ev.cancelable) ev.preventDefault();
       scrollWeekEdge(ev.clientY);
       const currentMinutes = snapCreatePoint(minutesFromClientY(ev.clientY));
@@ -649,6 +682,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
 
   function handleCreatePointerDown(e) {
     if (e.button != null && e.button !== 0) return;
+    cancelPendingClickCreate();
     if (e.target.closest('.calendar-time-block')) return;
     const isMouse = !e.pointerType || e.pointerType === 'mouse';
     if (isMouse && !condensedWeek) {
@@ -738,6 +772,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       if (ev.cancelable) ev.preventDefault();
       const currentMinutes = snapCreatePoint(minutesFromClientY(ev.clientY));
       current.currentMinutes = currentMinutes;
+      if (!current.active && Math.hypot(dx, dy) >= CREATE_DRAG_THRESHOLD) cancelPendingClickCreate();
       if (Math.hypot(dx, dy) >= CREATE_DRAG_THRESHOLD) current.active = true;
       setCreateGesture({
         colIdx: current.colIdx,
@@ -788,9 +823,13 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       return;
     }
 
-    if (e.detail >= 2) return;
+    if (e.detail >= 2) {
+      cancelPendingClickCreate();
+      return;
+    }
 
     if (cardPos) {
+      cancelPendingClickCreate();
       setCardPos(null);
       return;
     }
@@ -798,12 +837,16 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     if (tapToCreate && !e.target.closest('.calendar-time-block')) {
       const cell = e.target.closest('.calendar-cell');
       if (cell && !cell.classList.contains('time-column')) {
+        cancelPendingClickCreate();
         openCreateFromEvent(e);
         return;
       }
     }
 
-    if (e.target.closest('.calendar-time-block')) return;
+    if (e.target.closest('.calendar-time-block')) {
+      cancelPendingClickCreate();
+      return;
+    }
 
     setActiveBlockKey(null);
     if (tapToCreate) return;
@@ -819,16 +862,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     const latestStart = 24 * 60 - CLICK_PREVIEW_MINUTES;
     if (startMinutes > latestStart) startMinutes = latestStart;
     const endMinutes = startMinutes + CLICK_PREVIEW_MINUTES;
-    const { start, end } = datesForRange(day, startMinutes, endMinutes);
-    placeClickCreateCard(colIdx, startMinutes, endMinutes, {
-      hidePlus: true,
-      colIdx,
-      startMinutes,
-      endMinutes,
-      defaultStartTime: start,
-      defaultEndTime: end,
-      defaultDeadline: day,
-    });
+    scheduleClickCreate(colIdx, startMinutes, endMinutes, day);
   }
 
   // On grid double click, show card at click position
@@ -872,6 +906,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   function handleGridDoubleClick(e) {
     e.preventDefault();
     e.stopPropagation();
+    cancelPendingClickCreate();
     if (tapToCreate) return;
     if (ignoreDoubleClickRef.current) return;
     openCreateFromEvent(e);
@@ -1030,7 +1065,13 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     }
   }, [dragState.isActive, customDragState.isActive]);
 
-  useEffect(() => () => stopWeekGestureRef.current?.(), []);
+  useEffect(() => () => {
+    stopWeekGestureRef.current?.();
+    if (pendingClickTimerRef.current != null) {
+      window.clearTimeout(pendingClickTimerRef.current);
+      pendingClickTimerRef.current = null;
+    }
+  }, []);
   
   // Handler for user scroll
   const handleUserScroll = () => {
@@ -2339,6 +2380,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                     caretColor: 'transparent',
                   }}
                   onPointerDown={e => {
+                    cancelPendingClickCreate();
                     // Don't set active block if clicking on buttons / actions menu
                     if (
                       e.target.closest('.task-complete-btn') ||
