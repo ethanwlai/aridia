@@ -25,15 +25,31 @@ const hours = Array.from({ length: 24 }, (_, i) => i);
 const ROW_HEIGHT = 50;
 const SNAP_MINUTES = 5;
 const DRAG_ARM_THRESHOLD = 6;
-const CREATE_HOLD_MS = 300;
-const CREATE_HOLD_CANCEL_PX = 10;
 const CREATE_START_SNAP_MINUTES = 15;
 const CREATE_DRAG_THRESHOLD = 6;
 const CLICK_PREVIEW_MINUTES = 30;
 const CLICK_DELAY_MS = 250;
+const FLICK_DISTANCE_PX = 10;
+const FLICK_WINDOW_MS = 90;
+const FLICK_SPEED_PX_PER_MS = 0.3;
 
-function isVerticalScrollMove(dx, dy) {
-  return Math.abs(dy) >= CREATE_HOLD_CANCEL_PX && Math.abs(dy) >= Math.abs(dx);
+function classifyCreateMove(isTouch, dx, dy, elapsed) {
+  const dist = Math.hypot(dx, dy);
+  if (!isTouch) return dist >= CREATE_DRAG_THRESHOLD ? 'range' : 'pending';
+  const speed = elapsed > 0 ? dist / elapsed : 0;
+  const mostlyVertical = Math.abs(dy) >= Math.abs(dx);
+  if (
+    mostlyVertical
+    && dist >= FLICK_DISTANCE_PX
+    && (elapsed <= FLICK_WINDOW_MS || speed >= FLICK_SPEED_PX_PER_MS)
+  ) {
+    return 'scroll';
+  }
+  if (!mostlyVertical && dist >= CREATE_DRAG_THRESHOLD) return 'range';
+  if (dist >= CREATE_DRAG_THRESHOLD && elapsed > FLICK_WINDOW_MS && speed < FLICK_SPEED_PX_PER_MS) {
+    return 'range';
+  }
+  return 'pending';
 }
 
 function snapCreatePoint(minutes) {
@@ -156,6 +172,10 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   const createGestureRef = useRef(null);
   const swallowCreateClickRef = useRef(false);
   const ignoreDoubleClickRef = useRef(false);
+  const ignoreOutsideCloseRef = useRef(false);
+  const suppressGridClickRef = useRef(false);
+  const suppressClickSeqRef = useRef(0);
+  const detachCreateGestureRef = useRef(null);
   const pendingClickTimerRef = useRef(null);
   const pendingClickSeqRef = useRef(0);
   const cardRef = useRef();
@@ -286,11 +306,16 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     }
     
     function handleClick(e) {
+      if (ignoreOutsideCloseRef.current) {
+        ignoreOutsideCloseRef.current = false;
+        return;
+      }
       // Only prevent closing if clicking inside the card itself or its pickers
       if (cardRef.current && cardRef.current.contains(e.target)) return;
       if (document.querySelector('.aridia-datepicker-popper')?.contains(e.target)) return;
       if (document.querySelector('.custom-time-picker-modal')?.contains(e.target)) return;
       if (e.target.closest?.('.create-sheet') || e.target.closest?.('.create-sheet-overlay')) return;
+      if (scrollWrapperRef.current?.contains(e.target)) markGridClickHandled();
       
       // Close any open time picker using the proper method
       if (closeTimePickerRef.current) {
@@ -394,13 +419,14 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     };
   }
 
-  function openCondensedCreate(colIdx, startMinutes, endMinutes, point) {
+  function openCondensedCreate(colIdx, startMinutes, endMinutes, point, hidePlus = false) {
     const day = days[colIdx];
     if (!day) return;
     const { start, end } = datesForRange(day, startMinutes, endMinutes);
     setCardKey((prev) => prev + 1);
     setCardPos({
       condensed: true,
+      hidePlus: !!hidePlus,
       colIdx,
       startMinutes,
       endMinutes,
@@ -420,14 +446,51 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     }
   }
 
-  function scheduleClickCreate(colIdx, startMinutes, endMinutes, day) {
+  function markGridClickHandled() {
+    const seq = suppressClickSeqRef.current + 1;
+    suppressClickSeqRef.current = seq;
+    suppressGridClickRef.current = true;
+    window.setTimeout(() => {
+      if (suppressClickSeqRef.current === seq) suppressGridClickRef.current = false;
+    }, 500);
+  }
+
+  function armIgnoreSyntheticClose() {
+    const onMouseDown = (event) => {
+      document.removeEventListener('mousedown', onMouseDown, true);
+      const target = event.target;
+      if (cardRef.current?.contains(target)) return;
+      if (target?.closest?.('.create-sheet, .create-sheet-overlay, .aridia-datepicker-popper, .custom-time-picker-modal')) return;
+      ignoreOutsideCloseRef.current = true;
+      window.setTimeout(() => {
+        ignoreOutsideCloseRef.current = false;
+      }, 0);
+    };
+    document.addEventListener('mousedown', onMouseDown, true);
+    window.setTimeout(() => document.removeEventListener('mousedown', onMouseDown, true), 700);
+  }
+
+  function holdOffDoubleClick() {
+    ignoreDoubleClickRef.current = true;
+    window.setTimeout(() => {
+      ignoreDoubleClickRef.current = false;
+    }, 500);
+  }
+
+  function scheduleClickCreate(colIdx, startMinutes, endMinutes, day, point) {
     cancelPendingClickCreate();
     const seq = pendingClickSeqRef.current;
     const { start, end } = datesForRange(day, startMinutes, endMinutes);
     pendingClickTimerRef.current = window.setTimeout(() => {
       if (pendingClickSeqRef.current !== seq) return;
       pendingClickTimerRef.current = null;
-      if (swallowCreateClickRef.current || createGestureRef.current?.active) return;
+      const gesture = createGestureRef.current;
+      if (swallowCreateClickRef.current || gesture?.mode === 'range' || gesture?.mode === 'scroll') return;
+      holdOffDoubleClick();
+      if (condensedWeek) {
+        openCondensedCreate(colIdx, startMinutes, endMinutes, point, true);
+        return;
+      }
       placeClickCreateCard(colIdx, startMinutes, endMinutes, {
         hidePlus: true,
         colIdx,
@@ -592,46 +655,90 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     if (document.activeElement) document.activeElement.blur();
   }
 
-  function startDesktopCreateDrag(e) {
+  function openDragRangeCard(colIdx, range, point) {
+    const day = days[colIdx];
+    if (!day) return;
+    if (condensedWeek) {
+      openCondensedCreate(colIdx, range.startMinutes, range.endMinutes, point, true);
+      return;
+    }
+    const { start, end } = datesForRange(day, range.startMinutes, range.endMinutes);
+    placeWeekCreateCard(point.clientX, point.clientY, {
+      hidePlus: true,
+      colIdx,
+      startMinutes: range.startMinutes,
+      endMinutes: range.endMinutes,
+      defaultStartTime: start,
+      defaultEndTime: end,
+      defaultDeadline: day,
+    });
+  }
+
+  function handleCreatePointerDown(e) {
+    if (e.button != null && e.button !== 0) return;
+    if (e.target.closest('.calendar-time-block, .task-creation-card, .create-sheet, .create-sheet-overlay')) return;
+    if (cardPos || cardRef.current?.contains(e.target)) return;
+    detachCreateGestureRef.current?.();
+    detachCreateGestureRef.current = null;
+
     const cell = e.target.closest('.calendar-cell');
-    if (!cell || cell.classList.contains('time-column')) return;
+    if (!cell || cell.classList.contains('time-column')) {
+      cancelPendingClickCreate();
+      return;
+    }
     const colIdx = parseInt(cell.getAttribute('data-col'), 10);
     if (isNaN(colIdx)) return;
 
-    const originMinutes = snapCreatePoint(minutesFromClientY(e.clientY));
+    const secondTap = pendingClickTimerRef.current != null;
+    if (secondTap) cancelPendingClickCreate();
+
+    const isTouch = e.pointerType === 'touch';
+    const scrollEl = scrollWrapperRef.current;
+    const previousTouchAction = scrollEl?.style.touchAction ?? '';
+    if (isTouch && scrollEl) scrollEl.style.touchAction = 'none';
+
     const session = {
       pointerId: e.pointerId,
       originX: e.clientX,
       originY: e.clientY,
+      lastY: e.clientY,
       colIdx,
-      originMinutes,
-      currentMinutes: originMinutes,
-      active: false,
+      originMinutes: snapCreatePoint(minutesFromClientY(e.clientY)),
+      currentMinutes: snapCreatePoint(minutesFromClientY(e.clientY)),
+      startedAt: performance.now(),
+      originScrollTop: scrollEl?.scrollTop ?? 0,
+      isTouch,
+      secondTap,
+      mode: 'pending',
+      browserScroll: false,
     };
     createGestureRef.current = session;
-
-    function detach() {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onCancel);
-    }
 
     function samePointer(ev) {
       return ev.pointerId == null || ev.pointerId === session.pointerId;
     }
 
-    function onMove(ev) {
+    function endSession() {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      window.removeEventListener('touchmove', onTouchMove, true);
+      if (isTouch && scrollEl) scrollEl.style.touchAction = previousTouchAction;
+      if (createGestureRef.current === session) createGestureRef.current = null;
+      if (detachCreateGestureRef.current === endSession) detachCreateGestureRef.current = null;
+      setCreateGesture(null);
+    }
+
+    function onTouchMove(event) {
       const current = createGestureRef.current;
-      if (!current || !samePointer(ev)) return;
-      const dx = ev.clientX - current.originX;
-      const dy = ev.clientY - current.originY;
-      if (!current.active && Math.hypot(dx, dy) < CREATE_DRAG_THRESHOLD) return;
-      if (!current.active) cancelPendingClickCreate();
-      if (ev.cancelable) ev.preventDefault();
-      scrollWeekEdge(ev.clientY);
+      if (!current?.isTouch || current.browserScroll) return;
+      if (event.cancelable) event.preventDefault();
+    }
+
+    function updateRange(current, ev) {
       const currentMinutes = snapCreatePoint(minutesFromClientY(ev.clientY));
       current.currentMinutes = currentMinutes;
-      current.active = true;
+      current.mode = 'range';
       setCreateGesture({
         colIdx: current.colIdx,
         originMinutes: current.originMinutes,
@@ -641,177 +748,101 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       });
     }
 
-    function onUp(ev) {
-      const current = createGestureRef.current;
-      if (current && !samePointer(ev)) return;
-      detach();
-      createGestureRef.current = null;
-      setCreateGesture(null);
-      if (!current?.active) return;
-      swallowCreateClick();
-      if (!isOverScrollArea(ev.clientX, ev.clientY)) return;
-      const point = snapCreatePoint(minutesFromClientY(ev.clientY));
-      const range = rangeFromCreateDrag(current.originMinutes, point);
-      const day = days[current.colIdx];
-      if (!day) return;
-      const { start, end } = datesForRange(day, range.startMinutes, range.endMinutes);
-      placeWeekCreateCard(ev.clientX, ev.clientY, {
-        hidePlus: true,
-        colIdx: current.colIdx,
-        startMinutes: range.startMinutes,
-        endMinutes: range.endMinutes,
-        defaultStartTime: start,
-        defaultEndTime: end,
-        defaultDeadline: day,
-      });
-    }
-
-    function onCancel(ev) {
-      const current = createGestureRef.current;
-      if (current && !samePointer(ev)) return;
-      detach();
-      createGestureRef.current = null;
-      setCreateGesture(null);
-      if (current?.active) swallowCreateClick();
-    }
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onCancel);
-  }
-
-  function handleCreatePointerDown(e) {
-    if (e.button != null && e.button !== 0) return;
-    cancelPendingClickCreate();
-    if (e.target.closest('.calendar-time-block')) return;
-    const isMouse = !e.pointerType || e.pointerType === 'mouse';
-    if (isMouse && !condensedWeek) {
-      startDesktopCreateDrag(e);
-      return;
-    }
-    if (!condensedWeek || isMouse) return;
-    const cell = e.target.closest('.calendar-cell');
-    if (!cell || cell.classList.contains('time-column')) return;
-    const colIdx = parseInt(cell.getAttribute('data-col'), 10);
-    if (isNaN(colIdx)) return;
-
-    const originMinutes = snapCreatePoint(minutesFromClientY(e.clientY));
-    const session = {
-      pointerId: e.pointerId,
-      originX: e.clientX,
-      originY: e.clientY,
-      lastX: e.clientX,
-      lastY: e.clientY,
-      colIdx,
-      originMinutes,
-      currentMinutes: originMinutes,
-      armed: false,
-      active: false,
-      abandoned: false,
-    };
-    createGestureRef.current = session;
-
-    let holdTimer = 0;
-
-    function detach() {
-      window.clearTimeout(holdTimer);
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onCancel);
-      window.removeEventListener('touchmove', onTouchMove, true);
-    }
-
-    function onTouchMove(event) {
-      const current = createGestureRef.current;
-      if (!current?.armed || current.abandoned) return;
-      if (event.cancelable) event.preventDefault();
-    }
-
-    holdTimer = window.setTimeout(() => {
-      const current = createGestureRef.current;
-      if (!current || current.abandoned || current.armed) return;
-      const dx = current.lastX - current.originX;
-      const dy = current.lastY - current.originY;
-      if (isVerticalScrollMove(dx, dy)) {
-        current.abandoned = true;
-        createGestureRef.current = null;
-        swallowCreateClick();
-        detach();
-        return;
-      }
-      current.armed = true;
-      setCreateGesture({
-        colIdx: current.colIdx,
-        originMinutes: current.originMinutes,
-        currentMinutes: current.originMinutes,
-        armed: true,
-        active: false,
-      });
-    }, CREATE_HOLD_MS);
-
-    function samePointer(ev) {
-      return ev.pointerId == null || ev.pointerId === session.pointerId;
-    }
-
     function onMove(ev) {
       const current = createGestureRef.current;
-      if (!current || current.abandoned || !samePointer(ev)) return;
-      current.lastX = ev.clientX;
-      current.lastY = ev.clientY;
+      if (!current || !samePointer(ev)) return;
       const dx = ev.clientX - current.originX;
       const dy = ev.clientY - current.originY;
-      if (!current.armed) {
-        if (isVerticalScrollMove(dx, dy)) {
-          current.abandoned = true;
-          createGestureRef.current = null;
-          swallowCreateClick();
-          detach();
+      const elapsed = performance.now() - current.startedAt;
+
+      if (current.mode === 'pending' && current.isTouch && scrollEl && scrollEl.scrollTop !== current.originScrollTop) {
+        current.mode = 'scroll';
+        current.browserScroll = true;
+        cancelPendingClickCreate();
+        return;
+      }
+
+      if (current.mode === 'pending') {
+        const next = classifyCreateMove(current.isTouch, dx, dy, elapsed);
+        if (next === 'pending') return;
+        cancelPendingClickCreate();
+        if (next === 'scroll') {
+          current.mode = 'scroll';
+          current.lastY = ev.clientY;
+          if (scrollEl) scrollEl.scrollTop -= (ev.clientY - current.originY);
+          return;
+        }
+        if (ev.cancelable) ev.preventDefault();
+        scrollWeekEdge(ev.clientY);
+        updateRange(current, ev);
+        return;
+      }
+
+      if (current.mode === 'scroll') {
+        if (!current.browserScroll && scrollEl) {
+          scrollEl.scrollTop -= (ev.clientY - current.lastY);
+          current.lastY = ev.clientY;
         }
         return;
       }
+
       if (ev.cancelable) ev.preventDefault();
-      const currentMinutes = snapCreatePoint(minutesFromClientY(ev.clientY));
-      current.currentMinutes = currentMinutes;
-      if (!current.active && Math.hypot(dx, dy) >= CREATE_DRAG_THRESHOLD) cancelPendingClickCreate();
-      if (Math.hypot(dx, dy) >= CREATE_DRAG_THRESHOLD) current.active = true;
-      setCreateGesture({
-        colIdx: current.colIdx,
-        originMinutes: current.originMinutes,
-        currentMinutes,
-        armed: true,
-        active: current.active,
-      });
+      scrollWeekEdge(ev.clientY);
+      updateRange(current, ev);
     }
 
-    function finish(ev, cancelled) {
-      const current = createGestureRef.current;
-      if (current && !samePointer(ev)) return;
-      detach();
-      createGestureRef.current = null;
-      setCreateGesture(null);
-      if (!current || current.abandoned) return;
-      if (!current.armed) return;
-      swallowCreateClick();
-      if (cancelled) return;
-      const point = current.active
-        ? snapCreatePoint(minutesFromClientY(ev.clientY))
-        : current.originMinutes;
-      const range = rangeFromCreateDrag(current.originMinutes, point);
-      openCondensedCreate(current.colIdx, range.startMinutes, range.endMinutes, ev);
+    function finishTap(current, ev) {
+      setActiveBlockKey(null);
+      markGridClickHandled();
+      if (current.secondTap) {
+        swallowCreateClick();
+        if (current.isTouch) armIgnoreSyntheticClose();
+        openCreateFromEvent(ev);
+        return;
+      }
+      const day = days[current.colIdx];
+      if (!day) return;
+      let startMinutes = current.originMinutes;
+      const latestStart = 24 * 60 - CLICK_PREVIEW_MINUTES;
+      if (startMinutes > latestStart) startMinutes = latestStart;
+      scheduleClickCreate(current.colIdx, startMinutes, startMinutes + CLICK_PREVIEW_MINUTES, day, ev);
     }
 
     function onUp(ev) {
-      finish(ev, false);
+      const current = createGestureRef.current;
+      if (current && !samePointer(ev)) return;
+      const finished = current;
+      endSession();
+      if (!finished) return;
+      if (finished.mode === 'scroll') {
+        swallowCreateClick();
+        return;
+      }
+      if (finished.mode === 'range') {
+        swallowCreateClick();
+        if (finished.isTouch) armIgnoreSyntheticClose();
+        if (!isOverScrollArea(ev.clientX, ev.clientY)) return;
+        const point = snapCreatePoint(minutesFromClientY(ev.clientY));
+        openDragRangeCard(finished.colIdx, rangeFromCreateDrag(finished.originMinutes, point), ev);
+        return;
+      }
+      finishTap(finished, ev);
     }
 
     function onCancel(ev) {
-      finish(ev, true);
+      const current = createGestureRef.current;
+      if (current && !samePointer(ev)) return;
+      endSession();
+      swallowCreateClick();
     }
 
+    detachCreateGestureRef.current = endSession;
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onCancel);
-    window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+    if (isTouch) {
+      window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+    }
   }
 
   function handleGridSingleClick(e) {
@@ -820,6 +851,11 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
 
     if (swallowCreateClickRef.current) {
       swallowCreateClickRef.current = false;
+      return;
+    }
+
+    if (suppressGridClickRef.current) {
+      suppressGridClickRef.current = false;
       return;
     }
 
@@ -834,25 +870,16 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       return;
     }
 
-    if (tapToCreate && !e.target.closest('.calendar-time-block')) {
-      const cell = e.target.closest('.calendar-cell');
-      if (cell && !cell.classList.contains('time-column')) {
-        cancelPendingClickCreate();
-        openCreateFromEvent(e);
-        return;
-      }
-    }
-
     if (e.target.closest('.calendar-time-block')) {
       cancelPendingClickCreate();
       return;
     }
 
     setActiveBlockKey(null);
-    if (tapToCreate) return;
 
     const cell = e.target.closest('.calendar-cell');
     if (!cell || cell.classList.contains('time-column')) return;
+    if (pendingClickTimerRef.current != null) return;
     const colIdx = parseInt(cell.getAttribute('data-col'), 10);
     if (isNaN(colIdx)) return;
     const day = days[colIdx];
@@ -861,8 +888,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     let startMinutes = snapCreatePoint(minutesFromClientY(e.clientY));
     const latestStart = 24 * 60 - CLICK_PREVIEW_MINUTES;
     if (startMinutes > latestStart) startMinutes = latestStart;
-    const endMinutes = startMinutes + CLICK_PREVIEW_MINUTES;
-    scheduleClickCreate(colIdx, startMinutes, endMinutes, day);
+    scheduleClickCreate(colIdx, startMinutes, startMinutes + CLICK_PREVIEW_MINUTES, day, e);
   }
 
   // On grid double click, show card at click position
@@ -907,8 +933,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     e.preventDefault();
     e.stopPropagation();
     cancelPendingClickCreate();
-    if (tapToCreate) return;
-    if (ignoreDoubleClickRef.current) return;
+    if (ignoreDoubleClickRef.current || swallowCreateClickRef.current || suppressGridClickRef.current || cardPos) return;
     openCreateFromEvent(e);
   }
 
@@ -1067,6 +1092,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
 
   useEffect(() => () => {
     stopWeekGestureRef.current?.();
+    detachCreateGestureRef.current?.();
     if (pendingClickTimerRef.current != null) {
       window.clearTimeout(pendingClickTimerRef.current);
       pendingClickTimerRef.current = null;
@@ -2034,30 +2060,20 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         )}
 
         {(() => {
-          const showGesture = createGesture?.armed && (condensedWeek || createGesture.active);
+          const showGesture = !!createGesture?.active;
           const gestureRange = showGesture
-            ? rangeFromCreateDrag(
-                createGesture.originMinutes,
-                createGesture.active ? createGesture.currentMinutes : createGesture.originMinutes
-              )
+            ? rangeFromCreateDrag(createGesture.originMinutes, createGesture.currentMinutes)
             : null;
           const range = gestureRange
-            ? { ...gestureRange, colIdx: createGesture.colIdx, primed: condensedWeek && !createGesture.active }
-            : (cardPos?.condensed && cardPos.startMinutes != null
+            ? { ...gestureRange, colIdx: createGesture.colIdx, primed: false }
+            : (cardPos?.startMinutes != null && (cardPos.condensed || cardPos.hidePlus)
               ? {
                   startMinutes: cardPos.startMinutes,
                   endMinutes: cardPos.endMinutes,
                   colIdx: cardPos.colIdx,
                   primed: false,
                 }
-              : (!condensedWeek && cardPos?.hidePlus && cardPos.startMinutes != null
-                ? {
-                    startMinutes: cardPos.startMinutes,
-                    endMinutes: cardPos.endMinutes,
-                    colIdx: cardPos.colIdx,
-                    primed: false,
-                  }
-                : null));
+              : null);
           if (!range) return null;
           const visibleIdx = range.colIdx - colStart;
           if (visibleIdx < 0 || visibleIdx >= numDayCols) return null;
