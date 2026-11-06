@@ -29,6 +29,76 @@ const CREATE_START_SNAP_MINUTES = 15;
 const CREATE_DRAG_THRESHOLD = 6;
 const CLICK_PREVIEW_MINUTES = 30;
 const CLICK_DELAY_MS = 250;
+const BUBBLE_WIDTH = 400;
+const BUBBLE_HEIGHT = 240;
+const PLUS_OVERHANG = 18;
+
+function bubbleFitsViewport(width, height, cardWidth = BUBBLE_WIDTH, cardHeight = BUBBLE_HEIGHT, plus = PLUS_OVERHANG) {
+  return width >= cardWidth + plus && height >= cardHeight + plus;
+}
+
+function clampBubbleAnchor(anchor, view, cardWidth, cardHeight, plusOverhang) {
+  const plus = plusOverhang || 0;
+  let left = anchor.flippedX ? anchor.x - cardWidth : anchor.x;
+  let top = anchor.flippedY ? anchor.y - cardHeight : anchor.y;
+  let right = left + cardWidth;
+  let bottom = top + cardHeight;
+
+  if (anchor.flippedX) right += plus;
+  else left -= plus;
+  if (anchor.flippedY) bottom += plus;
+  else top -= plus;
+
+  const edge = 2;
+  const outerLeft = view.originX;
+  const outerTop = view.originY;
+  const outerRight = view.originX + view.width;
+  const outerBottom = view.originY + view.height;
+  const boxWidth = right - left;
+  const boxHeight = bottom - top;
+  const insetWidth = Math.max(0, view.width - edge * 2);
+  const insetHeight = Math.max(0, view.height - edge * 2);
+  const boundsLeft = boxWidth > insetWidth ? outerLeft : outerLeft + edge;
+  const boundsTop = boxHeight > insetHeight ? outerTop : outerTop + edge;
+  const boundsRight = boxWidth > insetWidth ? outerRight : outerRight - edge;
+  const boundsBottom = boxHeight > insetHeight ? outerBottom : outerBottom - edge;
+  const boundsWidth = Math.max(0, boundsRight - boundsLeft);
+  const boundsHeight = Math.max(0, boundsBottom - boundsTop);
+
+  if (right - left >= boundsWidth) {
+    left = boundsLeft;
+    right = boundsRight;
+  } else if (left < boundsLeft) {
+    right += boundsLeft - left;
+    left = boundsLeft;
+  } else if (right > boundsRight) {
+    left -= right - boundsRight;
+    right = boundsRight;
+  }
+
+  if (bottom - top >= boundsHeight) {
+    top = boundsTop;
+    bottom = boundsBottom;
+  } else if (top < boundsTop) {
+    bottom += boundsTop - top;
+    top = boundsTop;
+  } else if (bottom > boundsBottom) {
+    top -= bottom - boundsBottom;
+    bottom = boundsBottom;
+  }
+
+  if (anchor.flippedX) right -= plus;
+  else left += plus;
+  if (anchor.flippedY) bottom -= plus;
+  else top += plus;
+
+  return {
+    x: anchor.flippedX ? right : left,
+    y: anchor.flippedY ? bottom : top,
+    flippedX: !!anchor.flippedX,
+    flippedY: !!anchor.flippedY,
+  };
+}
 const FLICK_DISTANCE_PX = 10;
 const FLICK_WINDOW_MS = 90;
 const FLICK_SPEED_PX_PER_MS = 0.3;
@@ -130,7 +200,7 @@ function snapTotalMinutes(hour, minute) {
 }
 
 function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, onUpdateStatus, onUpdateTask, centerDay, setCenterDay, highlightedItem, onHighlightItem, isNavigating = false, searchResults = null, onAutoSchedule, onQuickMove, onExtendDuration, clearActiveBlockTrigger, isQuickMoving, onEdit, focusNowToken = 0, locateToken = 0 }) {
-  const { isCompact, isCoarse, isDrawerChrome } = useLayoutMode();
+  const { isCompact, isCoarse } = useLayoutMode();
   const condensedWeek = isCompact;
   const tapToCreate = isCompact || isCoarse;
 
@@ -179,13 +249,9 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   const pendingClickTimerRef = useRef(null);
   const pendingClickSeqRef = useRef(0);
   const cardRef = useRef();
-  const clickCardPlacedKey = useRef(null);
   const [cardWidth, setCardWidth] = useState(0);
   const [cardHeight, setCardHeight] = useState(0);
-  
-
-  // Cursor state
-  const [cursorStyle, setCursorStyle] = useState('default');
+  const [createViewportTick, setCreateViewportTick] = useState(0);
   // Ref to store the closeDatePicker method
   const closeDatePickerRef = useRef(null);
   // Ref to store the closeTimePicker method
@@ -231,30 +297,86 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   }, [clearActiveBlockTrigger]);
 
   useLayoutEffect(() => {
-    if (!cardPos?.besideBlock || clickCardPlacedKey.current === cardKey) return;
-    const scrollArea = scrollWrapperRef.current;
+    if (!cardPos || cardPos.condensed) return;
+    const view = getCreateViewport();
+    if (!view || view.width < 1 || view.height < 1) return;
+    if (!bubbleFitsViewport(view.width, view.height)) {
+      fallbackBubbleToSheet(cardPos);
+      return;
+    }
+
     const cardEl = cardRef.current;
-    if (!scrollArea || !cardEl || cardPos.startMinutes == null || cardPos.endMinutes == null) return;
-    const scrollRect = scrollArea.getBoundingClientRect();
-    const visibleCard = cardEl.querySelector('.task-creation-card') || cardEl;
-    const cardRect = visibleCard.getBoundingClientRect();
-    if (cardRect.height < 20) return;
-    const blockTop = scrollRect.top + (cardPos.startMinutes / 60) * ROW_HEIGHT - scrollArea.scrollTop;
-    const blockBottom = blockTop + ((cardPos.endMinutes - cardPos.startMinutes) / 60) * ROW_HEIGHT;
-    const gap = 8;
-    const spaceAbove = blockTop - scrollRect.top;
-    const spaceBelow = scrollRect.bottom - blockBottom;
-    const placeBelow = spaceBelow >= cardRect.height + gap || spaceBelow >= spaceAbove;
-    const visualTop = placeBelow ? blockBottom + gap : blockTop - gap - cardRect.height;
-    const delta = visualTop - cardRect.top;
-    clickCardPlacedKey.current = cardKey;
-    if (Math.abs(delta) < 1) return;
+    const visibleCard = cardEl?.querySelector('.task-creation-card') || cardEl;
+    const cardRect = visibleCard?.getBoundingClientRect();
+    const measured = cardRect && cardRect.width >= 20 && cardRect.height >= 20;
+    const measuredW = measured ? cardRect.width : BUBBLE_WIDTH;
+    const measuredH = measured ? cardRect.height : BUBBLE_HEIGHT;
+    const plus = cardPos.hidePlus ? 0 : PLUS_OVERHANG;
+    if (measured && (view.width < measuredW + plus || view.height < measuredH + plus)) {
+      fallbackBubbleToSheet(cardPos);
+      return;
+    }
+
+    let flippedX = !!cardPos.flippedX;
+    let flippedY = !!cardPos.flippedY;
+    let x = cardPos.x;
+    let y = cardPos.y;
+
+    let besideAdjusted = !!cardPos.besideAdjusted;
+    if (
+      cardPos.besideBlock
+      && !besideAdjusted
+      && cardPos.startMinutes != null
+      && cardPos.endMinutes != null
+      && measured
+      && scrollWrapperRef.current
+      && gridRef.current
+    ) {
+      const scrollArea = scrollWrapperRef.current;
+      const scrollRect = scrollArea.getBoundingClientRect();
+      const gridRect = gridRef.current.getBoundingClientRect();
+      const blockTop = scrollRect.top + (cardPos.startMinutes / 60) * ROW_HEIGHT - scrollArea.scrollTop;
+      const blockBottom = blockTop + ((cardPos.endMinutes - cardPos.startMinutes) / 60) * ROW_HEIGHT;
+      const gap = 8;
+      const spaceAbove = blockTop - scrollRect.top;
+      const spaceBelow = scrollRect.bottom - blockBottom;
+      const placeBelow = spaceBelow >= cardRect.height + gap || spaceBelow >= spaceAbove;
+      const visualTop = placeBelow ? blockBottom + gap : blockTop - gap - cardRect.height;
+      y = visualTop - gridRect.top;
+      flippedY = false;
+      besideAdjusted = true;
+    }
+
+    const clamped = clampBubbleAnchor({ x, y, flippedX, flippedY }, view, measuredW, measuredH, plus);
+    const same = Math.abs(clamped.x - cardPos.x) < 1
+      && Math.abs(clamped.y - cardPos.y) < 1
+      && clamped.flippedX === !!cardPos.flippedX
+      && clamped.flippedY === !!cardPos.flippedY
+      && besideAdjusted === !!cardPos.besideAdjusted
+      && Math.abs((cardPos.bubbleWidth || BUBBLE_WIDTH) - measuredW) < 1
+      && Math.abs((cardPos.bubbleHeight || BUBBLE_HEIGHT) - measuredH) < 1;
+    if (same) return;
     setCardPos((prev) => {
-      if (!prev?.besideBlock) return prev;
-      const currentVisualTop = prev.flippedY ? prev.y - 240 : prev.y;
-      return { ...prev, y: currentVisualTop + delta, flippedY: false };
+      if (!prev || prev.condensed) return prev;
+      return {
+        ...prev,
+        ...clamped,
+        besideAdjusted,
+        bubbleWidth: measuredW,
+        bubbleHeight: measuredH,
+      };
     });
-  }, [cardPos, cardKey]);
+  }, [cardPos, cardKey, createViewportTick, fallbackBubbleToSheet]);
+
+  useEffect(() => {
+    const el = scrollWrapperRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => {
+      setCreateViewportTick((tick) => tick + 1);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (isQuickMoving || ignoreActiveBlockKeyRef.current) return;
@@ -351,46 +473,25 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  // Helper to check if the card can fit at a given clientX/clientY
-  function canCardFitAt(clientX, clientY) {
+  function getCreateViewport() {
+    const scrollArea = scrollWrapperRef.current;
     const grid = gridRef.current;
-    if (!grid) return false;
+    if (!scrollArea || !grid) return null;
+    const scrollRect = scrollArea.getBoundingClientRect();
     const gridRect = grid.getBoundingClientRect();
-    const cardWidthPx = 400;
-    const cardHeightPx = 240;
-    const flipOptions = [
-      { flippedX: false, flippedY: false },
-      { flippedX: true, flippedY: false },
-      { flippedX: false, flippedY: true },
-      { flippedX: true, flippedY: true },
-    ];
-    for (const { flippedX, flippedY } of flipOptions) {
-      const left = flippedX ? clientX - cardWidthPx : clientX;
-      const top = flippedY ? clientY - cardHeightPx : clientY;
-      if (
-        left >= gridRect.left &&
-        left + cardWidthPx <= gridRect.right &&
-        top >= gridRect.top &&
-        top + cardHeightPx <= gridRect.bottom
-      ) {
-        return true;
-      }
-    }
-    return false;
+    return {
+      scrollRect,
+      gridRect,
+      originX: scrollRect.left - gridRect.left,
+      originY: scrollRect.top - gridRect.top,
+      width: scrollRect.width,
+      height: scrollRect.height,
+    };
   }
 
-  // Mouse move handler for cursor change
-  function handleGridMouseMove(e) {
-    if (canCardFitAt(e.clientX, e.clientY)) {
-      setCursorStyle('default');
-    } else {
-      setCursorStyle('not-allowed');
-    }
-  }
-
-  // Mouse leave handler to reset cursor
-  function handleGridMouseLeave() {
-    setCursorStyle('default');
+  function createBubbleFits(view = getCreateViewport()) {
+    if (!view || view.width < 1 || view.height < 1) return false;
+    return bubbleFitsViewport(view.width, view.height);
   }
 
   // On grid single click - handle escape/clear functionality
@@ -419,7 +520,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     };
   }
 
-  function openCondensedCreate(colIdx, startMinutes, endMinutes, point, hidePlus = false) {
+  function openCondensedCreate(colIdx, startMinutes, endMinutes, point, hidePlus = false, anchors) {
     const day = days[colIdx];
     if (!day) return;
     const { start, end } = datesForRange(day, startMinutes, endMinutes);
@@ -433,9 +534,38 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       defaultStartTime: start,
       defaultEndTime: end,
       defaultDeadline: day,
-      ...scrollAnchor(point?.clientX, point?.clientY),
+      ...(anchors || scrollAnchor(point?.clientX, point?.clientY)),
     });
     if (document.activeElement) document.activeElement.blur();
+  }
+
+  function fallbackBubbleToSheet(pos) {
+    if (!pos || pos.condensed) return;
+    let colIdx = pos.colIdx;
+    if (!(typeof colIdx === 'number' && colIdx >= 0) && pos.defaultDeadline) {
+      colIdx = days.findIndex((day) => isSameDay(day, pos.defaultDeadline));
+    }
+    const start = pos.defaultStartTime;
+    const end = pos.defaultEndTime;
+    if (
+      !(typeof colIdx === 'number' && colIdx >= 0)
+      || !(start instanceof Date)
+      || !(end instanceof Date)
+      || Number.isNaN(start.getTime())
+      || Number.isNaN(end.getTime())
+    ) {
+      setCardPos(null);
+      return;
+    }
+    let startMinutes = pos.startMinutes;
+    let endMinutes = pos.endMinutes;
+    if (startMinutes == null) startMinutes = start.getHours() * 60 + start.getMinutes();
+    if (endMinutes == null) {
+      endMinutes = end.getHours() * 60 + end.getMinutes();
+      if (end <= start || endMinutes <= startMinutes) endMinutes = Math.min(24 * 60, startMinutes + 60);
+    }
+    const anchors = pos.anchorX != null ? { anchorX: pos.anchorX, anchorY: pos.anchorY } : undefined;
+    openCondensedCreate(colIdx, startMinutes, endMinutes, null, !!pos.hidePlus, anchors);
   }
 
   function cancelPendingClickCreate() {
@@ -487,7 +617,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       const gesture = createGestureRef.current;
       if (swallowCreateClickRef.current || gesture?.mode === 'range' || gesture?.mode === 'scroll') return;
       holdOffDoubleClick();
-      if (condensedWeek) {
+      if (!createBubbleFits()) {
         openCondensedCreate(colIdx, startMinutes, endMinutes, point, true);
         return;
       }
@@ -566,31 +696,29 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   }
 
   function placeWeekCreateCard(clientX, clientY, fields) {
-    const scrollArea = scrollWrapperRef.current;
-    if (!scrollArea || !gridRef.current) return;
-    const scrollRect = scrollArea.getBoundingClientRect();
-    const xOffset = 0;
+    const view = getCreateViewport();
+    if (!view || !bubbleFitsViewport(view.width, view.height)) {
+      fallbackBubbleToSheet(fields);
+      return;
+    }
+    const { scrollRect } = view;
     const yOffsetNormal = 30;
     const yOffsetFlipped = 45;
-    const x = clientX - scrollRect.left + xOffset;
-    const y = clientY - scrollRect.top + yOffsetNormal;
-    const cardWidthPx = 400;
-    const cardHeightPx = 240;
-    const chosenFlip = { flippedX: false, flippedY: false };
-    const cardRight = clientX + cardWidthPx;
-    const cardBottom = clientY + cardHeightPx;
-    if (cardRight > scrollRect.right) chosenFlip.flippedX = true;
-    if (cardBottom > scrollRect.bottom) chosenFlip.flippedY = true;
-    const finalYOffset = chosenFlip.flippedY ? yOffsetFlipped : yOffsetNormal;
-    const adjustedY = clientY - scrollRect.top + finalYOffset;
-    if (chosenFlip.flippedX && (clientX - cardWidthPx) < scrollRect.left) return;
-    if (chosenFlip.flippedY && (clientY - cardHeightPx) < scrollRect.top) return;
+    const flippedX = clientX + BUBBLE_WIDTH > scrollRect.right;
+    const flippedY = clientY + BUBBLE_HEIGHT > scrollRect.bottom;
+    const yOffset = flippedY ? yOffsetFlipped : yOffsetNormal;
+    const plus = fields?.hidePlus ? 0 : PLUS_OVERHANG;
+    const clamped = clampBubbleAnchor({
+      x: clientX - scrollRect.left + view.originX,
+      y: clientY - scrollRect.top + yOffset + view.originY,
+      flippedX,
+      flippedY,
+    }, view, BUBBLE_WIDTH, BUBBLE_HEIGHT, plus);
     setCardKey((prev) => prev + 1);
     setCardPos({
-      x,
-      y: adjustedY,
-      flippedX: chosenFlip.flippedX,
-      flippedY: chosenFlip.flippedY,
+      ...clamped,
+      bubbleWidth: BUBBLE_WIDTH,
+      bubbleHeight: BUBBLE_HEIGHT,
       ...fields,
       ...scrollAnchor(clientX, clientY),
     });
@@ -600,11 +728,13 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   function placeClickCreateCard(colIdx, startMinutes, endMinutes, fields) {
     const scrollArea = scrollWrapperRef.current;
     const grid = gridRef.current;
-    if (!scrollArea || !grid) return;
+    const view = getCreateViewport();
+    if (!scrollArea || !grid || !view || !bubbleFitsViewport(view.width, view.height)) {
+      openCondensedCreate(colIdx, startMinutes, endMinutes, null, !!fields?.hidePlus);
+      return;
+    }
 
     const gap = 8;
-    const cardWidthPx = 400;
-    const cardHeightPx = 240;
     const blockHeight = ((endMinutes - startMinutes) / 60) * ROW_HEIGHT;
     const contentTop = (startMinutes / 60) * ROW_HEIGHT;
     const padding = 8;
@@ -618,12 +748,13 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     nextScroll = Math.max(0, Math.min(maxScroll, nextScroll));
     if (nextScroll !== scrollArea.scrollTop) scrollArea.scrollTop = nextScroll;
 
-    const scrollRect = scrollArea.getBoundingClientRect();
+    const placedView = getCreateViewport() || view;
+    const scrollRect = placedView.scrollRect;
     const blockTop = contentTop - scrollArea.scrollTop;
     const blockBottom = blockTop + blockHeight;
     const spaceAbove = blockTop;
     const spaceBelow = scrollRect.height - blockBottom;
-    const placeBelow = spaceBelow >= cardHeightPx + gap || spaceBelow >= spaceAbove;
+    const placeBelow = spaceBelow >= BUBBLE_HEIGHT + gap || spaceBelow >= spaceAbove;
     const flippedY = !placeBelow;
     const y = placeBelow ? blockBottom + gap : blockTop - gap;
 
@@ -633,21 +764,28 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     const blockLeft = TIME_COL_WIDTH + visibleIdx * colWidth;
     let flippedX = false;
     let x = blockLeft;
-    if (x + cardWidthPx > scrollRect.width) {
+    if (x + BUBBLE_WIDTH > scrollRect.width) {
       flippedX = true;
       x = Math.min(scrollRect.width, blockLeft + colWidth);
-      if (x - cardWidthPx < 0) {
+      if (x - BUBBLE_WIDTH < 0) {
         flippedX = false;
-        x = Math.max(0, scrollRect.width - cardWidthPx);
+        x = Math.max(0, scrollRect.width - BUBBLE_WIDTH);
       }
     }
 
-    setCardKey((prev) => prev + 1);
-    setCardPos({
-      x,
-      y,
+    const plus = fields?.hidePlus ? 0 : PLUS_OVERHANG;
+    const clamped = clampBubbleAnchor({
+      x: x + placedView.originX,
+      y: y + placedView.originY,
       flippedX,
       flippedY,
+    }, placedView, BUBBLE_WIDTH, BUBBLE_HEIGHT, plus);
+
+    setCardKey((prev) => prev + 1);
+    setCardPos({
+      ...clamped,
+      bubbleWidth: BUBBLE_WIDTH,
+      bubbleHeight: BUBBLE_HEIGHT,
       besideBlock: true,
       ...fields,
       ...scrollAnchor(scrollRect.left + blockLeft, scrollRect.top + blockTop),
@@ -658,7 +796,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   function openDragRangeCard(colIdx, range, point) {
     const day = days[colIdx];
     if (!day) return;
-    if (condensedWeek) {
+    if (!createBubbleFits()) {
       openCondensedCreate(colIdx, range.startMinutes, range.endMinutes, point, true);
       return;
     }
@@ -902,7 +1040,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     const colIdx = parseInt(cell.getAttribute('data-col'), 10);
     if (isNaN(rowIdx) || isNaN(colIdx)) return;
 
-    if (condensedWeek) {
+    if (!createBubbleFits()) {
       const point = snapCreatePoint(minutesFromClientY(e.clientY));
       const range = rangeFromCreateDrag(point, point);
       openCondensedCreate(colIdx, range.startMinutes, range.endMinutes, e);
@@ -923,6 +1061,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     end.setHours(start.getHours() + 1);
 
     placeWeekCreateCard(e.clientX, e.clientY, {
+      colIdx,
       defaultStartTime: start,
       defaultEndTime: end,
       defaultDeadline: day,
@@ -1921,7 +2060,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         minHeight: 0,
         flex: 1,
         background: 'white',
-        cursor: cursorStyle,
+        cursor: 'default',
       }}
     >
       {getTodayColumnIndex() === -1 ? (
@@ -1973,14 +2112,8 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         onClick={handleGridSingleClick}
         onPointerDown={handleCreatePointerDown}
         onDoubleClick={handleGridDoubleClick}
-        onMouseMove={(e) => {
-          handleGridMouseMove(e);
-          handleCustomDragMove(e);
-        }}
-        onMouseLeave={(e) => {
-          handleGridMouseLeave(e);
-          handleCustomDragLeave(e);
-        }}
+        onMouseMove={handleCustomDragMove}
+        onMouseLeave={handleCustomDragLeave}
         onMouseEnter={(e) => {
           handleCustomDragEnter(e);
         }}
@@ -2050,7 +2183,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
 
 
 
-        {(condensedWeek || isDrawerChrome) && cardPos?.anchorX != null && !cardPos.hidePlus && (
+        {cardPos?.condensed && cardPos.anchorX != null && !cardPos.hidePlus && (
           <div
             className="plus-circle"
             style={{ left: cardPos.anchorX - 18, top: cardPos.anchorY - 18, zIndex: 101, pointerEvents: 'none' }}
@@ -3364,7 +3497,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       )}
 
       {/* Task creation card */}
-      {condensedWeek && cardPos?.condensed ? (
+      {cardPos?.condensed ? (
         <CreateSheet open peek onClose={() => setCardPos(null)}>
           <TaskForm
             key={cardKey}
@@ -3382,42 +3515,17 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
             onCancel={() => setCardPos(null)}
           />
         </CreateSheet>
-      ) : isDrawerChrome && cardPos ? (
-        <CreateSheet open onClose={() => setCardPos(null)}>
-          <TaskCreationCard
-            key={cardKey}
-            eventOnly
-            showPlusCircle={false}
-            onCancel={() => setCardPos(null)}
-            onAdd={(task) => {
-              if (task.startTime && task.endTime && task.startTime === task.endTime) return;
-              if (onAdd) onAdd(task);
-              setCardPos(null);
-            }}
-            flippedX={false}
-            flippedY={false}
-            onDatePickerClose={(closeMethod) => {
-              closeDatePickerRef.current = closeMethod;
-            }}
-            onTimePickerClose={(closeMethod) => {
-              closeTimePickerRef.current = closeMethod;
-            }}
-            onTimesChange={handleCreateTimesChange}
-            defaultStartTime={cardPos?.defaultStartTime}
-            defaultEndTime={cardPos?.defaultEndTime}
-            defaultDeadline={cardPos?.defaultDeadline}
-          />
-        </CreateSheet>
       ) : (
       <div
         ref={cardRef}
+        className="week-create-bubble"
         style={{
           position: 'absolute',
           display: cardPos ? 'block' : 'none',
-          left: cardPos ? (cardPos.flippedX ? cardPos.x - 400 : cardPos.x) : 0,
+          left: cardPos ? (cardPos.flippedX ? cardPos.x - (cardPos.bubbleWidth || BUBBLE_WIDTH) : cardPos.x) : 0,
           top: cardPos ? cardPos.y : 0,
           zIndex: 100,
-          transform: cardPos?.flippedY ? 'translateY(-240px)' : 'none',
+          transform: cardPos?.flippedY ? `translateY(-${cardPos.bubbleHeight || BUBBLE_HEIGHT}px)` : 'none',
         }}
       >
 

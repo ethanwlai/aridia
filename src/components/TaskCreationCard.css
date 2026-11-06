@@ -11,6 +11,10 @@
   padding: 0;
 }
 
+.week-create-bubble .task-creation-card {
+  margin: 0;
+}
+
 .task-creation-card.flipped-x .plus-circle {
   left: auto;
   right: -18px;
