@@ -229,7 +229,7 @@ const CalendarHeader = ({
       // Find the task to get its type
       const task = tasks.find(t => t.id === suggestion.id);
       if (task) {
-        onHighlightItem({ id: task.id, type: task.type || 'task' });
+        onHighlightItem({ id: task.id, type: task.type || 'task' }, { locate: true });
       }
     } else if (suggestion.type === 'recent' || suggestion.type === 'popular') {
       // For recent/popular searches, find matching tasks and highlight the first one
@@ -238,7 +238,7 @@ const CalendarHeader = ({
       );
       if (matchingTasks.length > 0 && onHighlightItem) {
         const firstMatch = matchingTasks[0];
-        onHighlightItem({ id: firstMatch.id, type: firstMatch.type || 'task' });
+        onHighlightItem({ id: firstMatch.id, type: firstMatch.type || 'task' }, { locate: true });
       }
     }
   };
