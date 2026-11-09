@@ -644,13 +644,18 @@ const App = () => {
     setViewMode('month');
   }, []);
 
-  const handleHighlightItem = useCallback((item) => {
+  const handleHighlightItem = useCallback((item, meta) => {
     setListFocus(null);
     setHighlightedItem(item);
-  }, []);
+    if (meta?.locate && viewMode === 'week') setLocateToken((n) => n + 1);
+  }, [viewMode]);
 
   useEffect(() => {
     const handlePointerDown = (e) => {
+      if (window.globalDragState?.suppressSelectionClear) {
+        window.globalDragState.suppressSelectionClear = false;
+        return;
+      }
       if (isItemSelectionTarget(e.target)) return;
       setHighlightedItem(null);
       setListFocus(null);
@@ -901,6 +906,7 @@ const App = () => {
       setHighlightedItem(null);
     } else {
       setHighlightedItem(item);
+      if (viewMode === 'week') setLocateToken((n) => n + 1);
       if (isDrawerChrome) closeDrawer();
     }
   };
@@ -934,7 +940,8 @@ const App = () => {
       
       if (isNewHighlight) {
         lastHighlightedItemIdRef.current = highlightedItem.id;
-        
+        if (viewMode === 'week') return;
+
         // Find the task that was highlighted
         const highlightedTask = tasks.find(task => task.id === highlightedItem.id);
         
@@ -952,7 +959,7 @@ const App = () => {
       // Clear the ref when highlighting is cleared
       lastHighlightedItemIdRef.current = null;
     }
-  }, [highlightedItem, tasks, smoothNavigateTo]);
+  }, [highlightedItem, tasks, smoothNavigateTo, viewMode]);
   
 
   const dashboardItems = tasks.filter((item) =>

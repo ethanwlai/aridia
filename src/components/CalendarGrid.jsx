@@ -265,6 +265,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   const [userHasScrolled, setUserHasScrolled] = useState(false);
   // Replace activeFrontHighlight state with activeBlockKey
   const [activeBlockKey, setActiveBlockKey] = useState(null); // key of the active block
+  const [locatedDay, setLocatedDay] = useState(null);
   const ignoreActiveBlockKeyRef = useRef(false); // Flag to temporarily ignore activeBlockKey during Quick Move
   
 
@@ -386,16 +387,44 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     }
     const selector = highlightedTaskSelector(highlightedItem.id);
     const el = scrollWrapperRef.current.querySelector(selector);
-    if (!el) return;
-    const blockKey = el.getAttribute('data-block-key');
-    if (blockKey) {
-      setActiveBlockKey((prev) => (prev === blockKey ? prev : blockKey));
-    }
     const locateKey = `${locateToken}:${centerDay?.getTime?.() ?? ''}`;
-    if (!locateToken || scrolledLocateRef.current === locateKey) return;
-    const scrolled = scrollHighlightedIntoView(scrollWrapperRef.current, selector, { force: true });
-    if (scrolled) scrolledLocateRef.current = locateKey;
-  }, [highlightedItem, locateToken, centerDay, tasks, isQuickMoving]);
+    const locatePending = locateToken > 0 && scrolledLocateRef.current !== locateKey;
+
+    if (el) {
+      const blockKey = el.getAttribute('data-block-key');
+      if (blockKey) {
+        setActiveBlockKey((prev) => (prev === blockKey ? prev : blockKey));
+      }
+      if (!locatePending || isNavigating) return;
+      scrollHighlightedIntoView(scrollWrapperRef.current, selector);
+      scrolledLocateRef.current = locateKey;
+      return;
+    }
+
+    if (!locatePending || isNavigating) return;
+
+    const task = tasks.find((item) => isCalendarHighlighted(highlightedItem, item))
+      || tasks.find((item) => item?.id != null && String(item.id) === String(highlightedItem.id));
+    if (!task?.deadline) {
+      scrolledLocateRef.current = locateKey;
+      return;
+    }
+    const [year, month, day] = String(task.deadline).split('-').map(Number);
+    if (!year || !month || !day) {
+      scrolledLocateRef.current = locateKey;
+      return;
+    }
+    const taskDate = new Date(year, month - 1, day);
+    taskDate.setHours(0, 0, 0, 0);
+    const alreadyCentered = isSameDay(centerDay, taskDate);
+    const alreadyLocated = locatedDay && isSameDay(locatedDay, taskDate);
+    if (alreadyCentered && alreadyLocated) {
+      scrolledLocateRef.current = locateKey;
+      return;
+    }
+    if (!alreadyLocated) setLocatedDay(taskDate);
+    if (!alreadyCentered) setCenterDay(taskDate);
+  }, [highlightedItem, locateToken, centerDay, tasks, isQuickMoving, isNavigating, locatedDay, setCenterDay]);
 
   // Measure card width and height after it renders
   useEffect(() => {
@@ -708,9 +737,10 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     const flippedY = clientY + BUBBLE_HEIGHT > scrollRect.bottom;
     const yOffset = flippedY ? yOffsetFlipped : yOffsetNormal;
     const plus = fields?.hidePlus ? 0 : PLUS_OVERHANG;
+    const doubleClickLift = plus ? 25 : 0;
     const clamped = clampBubbleAnchor({
       x: clientX - scrollRect.left + view.originX,
-      y: clientY - scrollRect.top + yOffset + view.originY,
+      y: clientY - scrollRect.top + yOffset - doubleClickLift + view.originY,
       flippedX,
       flippedY,
     }, view, BUBBLE_WIDTH, BUBBLE_HEIGHT, plus);
@@ -1130,14 +1160,15 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
 
   // Navigation handlers with smooth transitions
   const handlePrevDay = () => {
-    const prevDay = addDays(centerDay, -1);
-    setCenterDay(prevDay);
+    setLocatedDay(null);
+    setCenterDay(addDays(centerDay, -1));
   };
   const handleNextDay = () => {
-    const nextDay = addDays(centerDay, 1);
-    setCenterDay(nextDay);
+    setLocatedDay(null);
+    setCenterDay(addDays(centerDay, 1));
   };
   const handleGoToday = () => {
+    setLocatedDay(null);
     setCenterDay(startOfDay(new Date()));
   };
 
@@ -1160,7 +1191,10 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   if (typeof visibleCols === 'number' && visibleCols < days.length) {
     // Determine priority column: today if it exists in window, otherwise centerDay (index 2)
     const todayIndex = getTodayColumnIndex();
-    const priorityCol = todayIndex !== -1 ? todayIndex : 2; // centerDay is always at index 2
+    const locatedIndex = locatedDay
+      ? days.findIndex((day) => isSameDay(day, locatedDay))
+      : -1;
+    const priorityCol = locatedIndex !== -1 ? locatedIndex : (todayIndex !== -1 ? todayIndex : 2);
     
     // Try to center the priority column, ensuring it's always visible
     // Calculate how many columns can fit on each side
@@ -2560,23 +2594,31 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                     const source = block._group ? block.tasks[0] : block;
 
                     if ((condensedWeek || tapToCreate) && e.pointerType && e.pointerType !== 'mouse') {
-                      if (!isCalendarHighlighted(highlightedItem, source)) {
-                        onHighlightItem?.({ id: source.id, type: source.type });
-                      }
-                      setActiveBlockKey(blockKey);
                       const startX = e.clientX;
                       const startY = e.clientY;
                       const taskData = taskDataFromBlock(block);
                       let started = false;
+                      const ignoreFollowingMouseDown = () => {
+                        if (!window.globalDragState) return;
+                        window.globalDragState.suppressSelectionClear = true;
+                        window.setTimeout(() => {
+                          if (window.globalDragState) window.globalDragState.suppressSelectionClear = false;
+                        }, 700);
+                      };
                       const timer = window.setTimeout(() => {
                         started = true;
+                        if (!isCalendarHighlighted(highlightedItemRef.current, source) && onHighlightItemRef.current) {
+                          if (window.globalDragState) window.globalDragState.suppressHighlightNavigation = true;
+                          onHighlightItemRef.current({ id: source.id, type: source.type });
+                        }
+                        setActiveBlockKey(blockKey);
                         startCustomDrag(e, taskData, false);
                       }, 400);
                       const cleanup = () => {
                         window.clearTimeout(timer);
                         window.removeEventListener('pointermove', onMove);
                         window.removeEventListener('pointerup', onUp);
-                        window.removeEventListener('pointercancel', onUp);
+                        window.removeEventListener('pointercancel', onCancel);
                         window.removeEventListener('touchmove', onTouchMove, true);
                       };
                       const onTouchMove = (event) => {
@@ -2595,11 +2637,24 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                       const onUp = (upEvent) => {
                         const wasStarted = started;
                         cleanup();
-                        if (wasStarted) handleCustomDragEnd(upEvent);
+                        ignoreFollowingMouseDown();
+                        if (wasStarted) {
+                          handleCustomDragEnd(upEvent);
+                          return;
+                        }
+                        if (activeBlockKey === blockKey) {
+                          if (onEdit) onEdit(source);
+                          return;
+                        }
+                        toggleCalendarHighlight(highlightedItemRef.current, onHighlightItemRef.current, source);
+                        setActiveBlockKey(blockKey);
+                      };
+                      const onCancel = () => {
+                        cleanup();
                       };
                       window.addEventListener('pointermove', onMove);
                       window.addEventListener('pointerup', onUp);
-                      window.addEventListener('pointercancel', onUp);
+                      window.addEventListener('pointercancel', onCancel);
                       window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
                       return;
                     }
