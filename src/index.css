@@ -898,6 +898,10 @@ html.layout-compact .frame-box {
   transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+html.layout-compact .calendar-time-block.is-selected {
+  touch-action: none;
+}
+
 .calendar-grid.is-dragging .calendar-time-block,
 .calendar-time-block.is-dragging {
   transition: none;

@@ -147,7 +147,9 @@
   z-index: 3;
 }
 
+html.layout-compact .day-time-block.is-active,
 html.layout-compact .day-time-block.is-selected {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   touch-action: none;
 }
 
