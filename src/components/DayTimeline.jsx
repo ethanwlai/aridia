@@ -92,6 +92,7 @@ export default function DayTimeline({
   onCreateAt,
   onCancelCreate,
   tapToCreate = false,
+  selectThenDrag = false,
   longPressMove = false,
   focusNowToken = 0,
   locateToken = 0,
@@ -112,6 +113,7 @@ export default function DayTimeline({
   const createDragRef = useRef(null);
   const stopCreateDragListenersRef = useRef(null);
   const stopBlockDragListenersRef = useRef(null);
+  const stopSelectTapRef = useRef(null);
   const dayStartRef = useRef(null);
   const onUpdateTaskRef = useRef(onUpdateTask);
   onUpdateTaskRef.current = onUpdateTask;
@@ -314,7 +316,54 @@ export default function DayTimeline({
       return;
     }
 
-    if (longPressMove && e.pointerType && e.pointerType !== 'mouse') {
+    const isTouch = e.pointerType && e.pointerType !== 'mouse';
+
+    if (selectThenDrag && isTouch) {
+      e.stopPropagation();
+      closeCreate();
+      stopSelectTapRef.current?.();
+
+      const alreadySelected = isCalendarHighlighted(highlightedItemRef.current, item) || activeId === item.id;
+      if (!alreadySelected) {
+        const startX = e.clientX;
+        const startY = e.clientY;
+        let abandoned = false;
+        const stop = () => {
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+          window.removeEventListener('pointercancel', onCancel);
+          if (stopSelectTapRef.current === stop) stopSelectTapRef.current = null;
+        };
+        const onMove = (moveEvent) => {
+          const dx = moveEvent.clientX - startX;
+          const dy = moveEvent.clientY - startY;
+          if (!isVerticalScrollMove(dx, dy)) return;
+          abandoned = true;
+          stop();
+        };
+        const onUp = () => {
+          stop();
+          if (abandoned) return;
+          setActiveId(item.id);
+          if (!isCalendarHighlighted(highlightedItemRef.current, item)) {
+            onHighlightItemRef.current?.({ id: item.id, type: item.type });
+          }
+        };
+        const onCancel = () => {
+          abandoned = true;
+          stop();
+        };
+        stopSelectTapRef.current = stop;
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onCancel);
+        return;
+      }
+
+      options = { ...options, touchSelectDrag: true };
+    }
+
+    if (longPressMove && isTouch && !options.touchSelectDrag) {
       const startX = e.clientX;
       const startY = e.clientY;
       const target = e.currentTarget;
@@ -390,15 +439,15 @@ export default function DayTimeline({
       onHighlightItemRef.current?.({ id: item.id, type: item.type });
     };
 
-    const onMove = (moveEvent) => {
+    const applyDragPoint = (clientX, clientY) => {
       const current = dragStateRef.current;
       if (!current || current.source !== 'block' || current.item?.id !== dragId) return;
-      if (!current.moved && Math.hypot(moveEvent.clientX - originX, moveEvent.clientY - originY) < BLOCK_DRAG_THRESHOLD) {
+      if (!current.moved && Math.hypot(clientX - originX, clientY - originY) < BLOCK_DRAG_THRESHOLD) {
         return;
       }
       if (!current.moved) keepHighlightForDrag();
-      autoScrollAt(moveEvent.clientY);
-      const minutes = yToMinutes(moveEvent.clientY - current.clickOffsetY);
+      autoScrollAt(clientY);
+      const minutes = yToMinutes(clientY - current.clickOffsetY);
       const next = {
         ...current,
         previewTop: (minutes / 60) * ROW_HEIGHT,
@@ -410,13 +459,17 @@ export default function DayTimeline({
       setDragState(next);
     };
 
-    const onUp = () => {
+    const onMove = (moveEvent) => {
+      applyDragPoint(moveEvent.clientX, moveEvent.clientY);
+    };
+
+    const finishDrag = ({ save }) => {
       stopBlockDragListenersRef.current?.();
       const current = dragStateRef.current;
       if (!current || current.source !== 'block' || current.item?.id !== dragId) return;
       dragStateRef.current = null;
       setDragState(null);
-      if (current.moved) {
+      if (save && current.moved) {
         markJustDragged();
         if (current.item?.id != null) {
           onUpdateTaskRef.current?.(
@@ -430,26 +483,51 @@ export default function DayTimeline({
         }
         return;
       }
-      if (current.fromLongPress) return;
+      if (!save || current.moved || current.fromLongPress) return;
       const wasHighlighted = isCalendarHighlighted(highlightedItemRef.current, item);
       toggleCalendarHighlight(highlightedItemRef.current, onHighlightItemRef.current, item);
       if (wasHighlighted) setActiveId(null);
     };
 
+    const onUp = () => finishDrag({ save: true });
+    const onCancel = () => {
+      if (options.touchSelectDrag) return;
+      finishDrag({ save: true });
+    };
+
     const onBlockTouchMove = (event) => {
       if (event.cancelable) event.preventDefault();
+      if (!options.touchSelectDrag) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      applyDragPoint(touch.clientX, touch.clientY);
     };
+
+    const onTouchEnd = (event) => {
+      const touch = event.changedTouches?.[0];
+      if (touch) applyDragPoint(touch.clientX, touch.clientY);
+      finishDrag({ save: true });
+    };
+
+    const onTouchCancel = () => finishDrag({ save: false });
+
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
-    if (options.fromLongPress) {
+    window.addEventListener('pointercancel', onCancel);
+    if (options.fromLongPress || options.touchSelectDrag) {
       window.addEventListener('touchmove', onBlockTouchMove, { capture: true, passive: false });
+    }
+    if (options.touchSelectDrag) {
+      window.addEventListener('touchend', onTouchEnd);
+      window.addEventListener('touchcancel', onTouchCancel);
     }
     stopBlockDragListenersRef.current = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener('pointercancel', onCancel);
       window.removeEventListener('touchmove', onBlockTouchMove, { capture: true });
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchCancel);
       stopBlockDragListenersRef.current = null;
     };
   };
@@ -597,6 +675,7 @@ export default function DayTimeline({
   useEffect(() => () => {
     stopCreateDragListenersRef.current?.();
     stopBlockDragListenersRef.current?.();
+    stopSelectTapRef.current?.();
   }, []);
 
   useLayoutEffect(() => {
@@ -941,9 +1020,11 @@ export default function DayTimeline({
         </div>
       </div>
       <p className="day-timeline-hint">
-        {tapToCreate
-          ? 'Tap an empty slot to create · Hold, then drag, an empty slot · Long-press a block to move'
-          : 'Click or drag an empty slot to create · Drag a block to schedule'}
+        {selectThenDrag
+          ? 'Tap an empty slot to create · Hold, then drag, an empty slot · Tap a block to select, then drag it'
+          : tapToCreate
+            ? 'Tap an empty slot to create · Hold, then drag, an empty slot · Long-press a block to move'
+            : 'Click or drag an empty slot to create · Drag a block to schedule'}
       </p>
     </div>
   );
