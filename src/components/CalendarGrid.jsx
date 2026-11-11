@@ -25,6 +25,8 @@ const hours = Array.from({ length: 24 }, (_, i) => i);
 const ROW_HEIGHT = 50;
 const SNAP_MINUTES = 5;
 const DRAG_ARM_THRESHOLD = 6;
+const COMPACT_DRAG_SNAP_MINUTES = 15;
+const COMPACT_SCROLL_CANCEL_PX = 10;
 const CREATE_START_SNAP_MINUTES = 15;
 const CREATE_DRAG_THRESHOLD = 6;
 const CLICK_PREVIEW_MINUTES = 30;
@@ -2005,6 +2007,214 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     window.addEventListener('pointercancel', onUp);
   }, [startCustomDrag, handleCustomDragMove, handleCustomDragEnd]);
 
+  const armCompactWeekBlock = useCallback((e, block, blockKey, dayIdx) => {
+    stopWeekGestureRef.current?.();
+    const source = block._group ? block.tasks[0] : block;
+    const alreadySelected = isCalendarHighlighted(highlightedItemRef.current, source) || activeBlockKey === blockKey;
+
+    if (!alreadySelected) {
+      const startX = e.clientX;
+      const startY = e.clientY;
+      let abandoned = false;
+      const stop = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onCancel);
+        if (stopWeekGestureRef.current === stop) stopWeekGestureRef.current = null;
+      };
+      const onMove = (moveEvent) => {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.abs(dy) < COMPACT_SCROLL_CANCEL_PX || Math.abs(dy) < Math.abs(dx)) return;
+        abandoned = true;
+        stop();
+      };
+      const onUp = () => {
+        stop();
+        if (abandoned) return;
+        setActiveBlockKey(blockKey);
+        if (!isCalendarHighlighted(highlightedItemRef.current, source)) {
+          onHighlightItemRef.current?.({ id: source.id, type: source.type });
+        }
+      };
+      const onCancel = () => {
+        abandoned = true;
+        stop();
+      };
+      stopWeekGestureRef.current = stop;
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onCancel);
+      return;
+    }
+
+    const blockEl = e.currentTarget;
+    const scrollEl = scrollWrapperRef.current;
+    const gridEl = gridRef.current;
+    if (!blockEl || !scrollEl || !gridEl) return;
+    const taskData = taskDataFromBlock(block);
+    const duration = getItemDurationMinutes(taskData);
+    const originX = e.clientX;
+    const originY = e.clientY;
+    const originRect = blockEl.getBoundingClientRect();
+    const originGridRect = gridEl.getBoundingClientRect();
+    const originPreviewTop = originRect.top - originGridRect.top;
+    const originPreviewLeft = originRect.left - originGridRect.left;
+    let moved = false;
+    let finished = false;
+
+    const columnFromClientX = (clientX) => {
+      const scrollRect = scrollEl.getBoundingClientRect();
+      const span = Math.max(1, colEnd - colStart);
+      const dayColumnWidth = (scrollRect.width - TIME_COL_WIDTH) / span;
+      if (dayColumnWidth <= 0) return null;
+      const relativeX = clientX - scrollRect.left;
+      if (relativeX < TIME_COL_WIDTH) return null;
+      const colIdx = Math.floor((relativeX - TIME_COL_WIDTH) / dayColumnWidth) + colStart;
+      return Math.max(colStart, Math.min(colEnd - 1, colIdx));
+    };
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      window.removeEventListener('touchmove', onTouchMove, true);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchCancel);
+      if (stopWeekGestureRef.current === cleanup) stopWeekGestureRef.current = null;
+    };
+
+    const applyPoint = (clientX, clientY) => {
+      if (!moved && Math.hypot(clientX - originX, clientY - originY) < DRAG_ARM_THRESHOLD) return;
+      if (!moved) {
+        moved = true;
+        if (!isCalendarHighlighted(highlightedItemRef.current, source) && onHighlightItemRef.current) {
+          if (window.globalDragState) window.globalDragState.suppressHighlightNavigation = true;
+          onHighlightItemRef.current({ id: source.id, type: source.type });
+        }
+        setActiveBlockKey(blockKey);
+        setIsMovingTask(true);
+        setMovedTaskId(taskData.id);
+      }
+      const scrollRect = scrollEl.getBoundingClientRect();
+      const edge = 100;
+      if (clientY >= scrollRect.top && clientY <= scrollRect.bottom) {
+        const fromTop = clientY - scrollRect.top;
+        const fromBottom = scrollRect.bottom - clientY;
+        const speedFor = (distance) => Math.round(20 * Math.max(1, (edge - distance) / 20));
+        if (fromTop < edge) scrollEl.scrollTop -= speedFor(fromTop);
+        else if (fromBottom < edge) scrollEl.scrollTop += speedFor(fromBottom);
+      }
+      const gridRect = gridEl.getBoundingClientRect();
+      const previewTop = originPreviewTop + (clientY - originY) + (originGridRect.top - gridRect.top);
+      const previewLeft = originPreviewLeft + (clientX - originX) + (originGridRect.left - gridRect.left);
+      const contentY = previewTop - (scrollEl.getBoundingClientRect().top - gridRect.top) + scrollEl.scrollTop;
+      const snapped = Math.min(
+        24 * 60 - COMPACT_DRAG_SNAP_MINUTES,
+        Math.max(0, Math.min(24 * 60, snapMinutes(contentY / ROW_HEIGHT * 60, COMPACT_DRAG_SNAP_MINUTES)))
+      );
+      const nextDrag = {
+        isActive: true,
+        startX: originX,
+        startY: originY,
+        currentX: clientX,
+        currentY: clientY,
+        taskData,
+        isFromSidebar: false,
+        isMovingExistingTask: true,
+        clickOffsetY: originY - originRect.top,
+      };
+      customDragRef.current = nextDrag;
+      setCustomDragState(nextDrag);
+      setDragPreviewSynced({
+        left: previewLeft,
+        top: previewTop,
+        width: originRect.width,
+        height: originRect.height,
+        color: getItemColor(source),
+        opacity: 0.55,
+        isShortBlock: originRect.height < 48,
+        startHour: Math.floor(snapped / 60),
+        startMinute: snapped % 60,
+        startMinutes: snapped,
+        duration,
+        colIdx: columnFromClientX(clientX),
+      });
+    };
+
+    const finish = ({ save, clientX, clientY }) => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      if (moved) {
+        swallowCreateClickRef.current = true;
+        window.setTimeout(() => {
+          swallowCreateClickRef.current = false;
+        }, 400);
+      }
+      const preview = dragPreviewRef.current;
+      customDragRef.current = INACTIVE_CUSTOM_DRAG;
+      setCustomDragState(INACTIVE_CUSTOM_DRAG);
+      setDragPreviewSynced(null);
+      setIsMovingTask(false);
+      setMovedTaskId(null);
+      if (!save || !moved || !preview || taskData.id == null) {
+        if (!save || moved) return;
+        const wasHighlighted = isCalendarHighlighted(highlightedItemRef.current, source);
+        toggleCalendarHighlight(highlightedItemRef.current, onHighlightItemRef.current, source);
+        if (wasHighlighted) setActiveBlockKey(null);
+        return;
+      }
+      const originDayIdx = colStart + dayIdx;
+      const colIdx = (clientX == null ? null : columnFromClientX(clientX))
+        ?? preview.colIdx
+        ?? originDayIdx;
+      const date = days[colIdx] || days[originDayIdx] || days[0];
+      if (!date || !onUpdateTask) return;
+      const startMinutes = preview.startMinutes ?? 0;
+      const endTotalMinutes = startMinutes + duration;
+      onUpdateTask(taskData.id, {
+        deadline: format(date, 'yyyy-MM-dd'),
+        startTime: formatMinutes(startMinutes),
+        endTime: endTotalMinutes >= 24 * 60
+          ? formatMinutes(endTotalMinutes - 24 * 60)
+          : formatMinutes(endTotalMinutes),
+      });
+    };
+
+    const onMove = (moveEvent) => {
+      applyPoint(moveEvent.clientX, moveEvent.clientY);
+    };
+    const onUp = (upEvent) => {
+      finish({ save: true, clientX: upEvent.clientX, clientY: upEvent.clientY });
+    };
+    const onCancel = () => {};
+    const onTouchMove = (event) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+      applyPoint(touch.clientX, touch.clientY);
+      if (moved && event.cancelable) event.preventDefault();
+    };
+    const onTouchEnd = (event) => {
+      const touch = event.changedTouches?.[0];
+      if (touch) applyPoint(touch.clientX, touch.clientY);
+      finish({
+        save: true,
+        clientX: touch?.clientX,
+        clientY: touch?.clientY,
+      });
+    };
+    const onTouchCancel = () => finish({ save: false });
+
+    stopWeekGestureRef.current = cleanup;
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+    window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchCancel);
+  }, [activeBlockKey, colStart, colEnd, days, onUpdateTask, setDragPreviewSynced, TIME_COL_WIDTH]);
+
   // Global mouse event listener to detect sidebar drag start
   useEffect(() => {
     const handleGlobalMouseMove = (e) => {
@@ -2588,12 +2798,19 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                       return;
                     }
 
+                    const isTouch = e.pointerType && e.pointerType !== 'mouse';
+                    if (condensedWeek && isTouch) {
+                      e.stopPropagation();
+                      armCompactWeekBlock(e, block, blockKey, dayIdx);
+                      return;
+                    }
+
                     e.preventDefault();
                     e.stopPropagation();
 
                     const source = block._group ? block.tasks[0] : block;
 
-                    if ((condensedWeek || tapToCreate) && e.pointerType && e.pointerType !== 'mouse') {
+                    if (tapToCreate && !condensedWeek && isTouch) {
                       const startX = e.clientX;
                       const startY = e.clientY;
                       const taskData = taskDataFromBlock(block);

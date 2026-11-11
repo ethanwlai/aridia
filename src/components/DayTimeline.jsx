@@ -420,6 +420,9 @@ export default function DayTimeline({
     const dragId = item.id;
     const originX = e.clientX;
     const originY = e.clientY;
+    const smoothTouch = Boolean(options.touchSelectDrag || options.fromLongPress);
+    const originTop = geo.top;
+    const originColumnTop = dayColumnRef.current?.getBoundingClientRect().top ?? 0;
     const initial = {
       item,
       source: 'block',
@@ -447,11 +450,22 @@ export default function DayTimeline({
       }
       if (!current.moved) keepHighlightForDrag();
       autoScrollAt(clientY);
-      const minutes = yToMinutes(clientY - current.clickOffsetY);
+      let previewTop;
+      let previewStart;
+      if (smoothTouch) {
+        const columnTop = dayColumnRef.current?.getBoundingClientRect().top ?? originColumnTop;
+        const visualTop = originTop + (clientY - originY) + (originColumnTop - columnTop);
+        previewTop = visualTop;
+        previewStart = yToMinutes(visualTop + columnTop);
+      } else {
+        const minutes = yToMinutes(clientY - current.clickOffsetY);
+        previewTop = (minutes / 60) * ROW_HEIGHT;
+        previewStart = minutes;
+      }
       const next = {
         ...current,
-        previewTop: (minutes / 60) * ROW_HEIGHT,
-        previewStart: minutes,
+        previewTop,
+        previewStart,
         moved: true,
         overGrid: true,
       };
