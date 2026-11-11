@@ -257,7 +257,8 @@ const DayView = ({
           onCreateAt={handleCreateAt}
           onCancelCreate={closeCreate}
           tapToCreate={isCompact || isCoarse}
-          longPressMove={isCompact || isCoarse}
+          selectThenDrag={isCompact}
+          longPressMove={isCoarse && !isCompact}
           focusNowToken={focusNowToken}
           locateToken={locateToken}
         />
