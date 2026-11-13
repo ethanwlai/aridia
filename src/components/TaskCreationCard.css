@@ -189,7 +189,6 @@
 .task-creation-card .pill-date.active {
   background: #5f33b1 !important;
   box-shadow: 0 2px 8px #5f33b122;
-  outline: none;
 }
 .task-creation-card .pill-date.active {
   background: #5f33b1 !important;
@@ -855,7 +854,7 @@
 }
 
 /* Force remove focus styles from date pills after click */
-.task-creation-card .pill-date:focus {
+.task-creation-card .pill-date:focus:not(:focus-visible) {
   outline: none !important;
 }
 
@@ -1109,7 +1108,7 @@
 }
 
 /* Force remove focus styles from date pills after click */
-.task-creation-card .pill-date:focus {
+.task-creation-card .pill-date:focus:not(:focus-visible) {
   outline: none !important;
 }
 

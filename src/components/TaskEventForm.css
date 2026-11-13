@@ -56,7 +56,6 @@
 .pill-date.active {
   background: #5f33b1 !important;
   box-shadow: 0 2px 8px #5f33b122;
-  outline: none;
 }
 
 .pill-date.active {
@@ -430,7 +429,7 @@
   pointer-events: auto !important;
 }
 
-.pill-date:focus {
+.pill-date:focus:not(:focus-visible) {
   outline: none !important;
 }
 
