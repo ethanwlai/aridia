@@ -1403,3 +1403,17 @@ html.layout-compact .mcg-full .mcg-chip {
   outline: none;
   box-shadow: none;
 }
+
+/* Mouse and touch focus stay clear. Keyboard focus uses Aridia purple. */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus:not(:focus-visible) {
+  outline: none !important;
+}
+
+:focus-visible {
+  outline: 2px solid #a084e8;
+  outline-offset: 2px;
+}

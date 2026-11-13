@@ -167,8 +167,6 @@ function taskDataFromBlock(block) {
     type: source.type,
   };
 }
-const MAX_START_MINUTES = 24 * 60 - SNAP_MINUTES;
-
 function getHoveredCalendarCell(e) {
   if (e?.target?.closest) {
     const fromTarget = e.target.closest('.calendar-cell');
@@ -181,10 +179,11 @@ function getHoveredCalendarCell(e) {
   return stack.find((el) => el.classList?.contains('calendar-cell') && !el.classList.contains('time-column')) || null;
 }
 
-function snapStartFromPosition(position, clickOffsetY = 0) {
+function snapStartFromPosition(position, clickOffsetY = 0, snapStep = SNAP_MINUTES) {
   const cursorMinutes = position.hour * 60 + position.minute;
   const offsetMinutes = (clickOffsetY / ROW_HEIGHT) * 60;
-  const clamped = Math.max(0, Math.min(MAX_START_MINUTES, snapMinutes(cursorMinutes - offsetMinutes, SNAP_MINUTES)));
+  const maxStart = 24 * 60 - snapStep;
+  const clamped = Math.max(0, Math.min(maxStart, snapMinutes(cursorMinutes - offsetMinutes, snapStep)));
   return {
     startMinutes: clamped,
     hour: Math.floor(clamped / 60),
@@ -192,9 +191,10 @@ function snapStartFromPosition(position, clickOffsetY = 0) {
   };
 }
 
-function snapTotalMinutes(hour, minute) {
-  const snapped = snapMinutes(hour * 60 + minute, SNAP_MINUTES);
-  const clamped = Math.max(0, Math.min(MAX_START_MINUTES, snapped));
+function snapTotalMinutes(hour, minute, snapStep = SNAP_MINUTES) {
+  const snapped = snapMinutes(hour * 60 + minute, snapStep);
+  const maxStart = 24 * 60 - snapStep;
+  const clamped = Math.max(0, Math.min(maxStart, snapped));
   return {
     hour: Math.floor(clamped / 60),
     minute: clamped % 60,
@@ -1436,7 +1436,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   );
   
   // Optimized position calculation function with caching
-  const calculatePosition = useCallback((e, cell) => {
+  const calculatePosition = useCallback((e, cell, snapStep = SNAP_MINUTES) => {
     const hoveredCell = cell && !cell.classList.contains('time-column')
       ? cell
       : getHoveredCalendarCell(e);
@@ -1449,7 +1449,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       if (!isNaN(rowIdx) && !isNaN(colIdx)) {
         const cellRect = hoveredCell.getBoundingClientRect();
         const minuteInCell = Math.round(((e.clientY - cellRect.top) / cellRect.height) * 60);
-        const snapped = snapTotalMinutes(rowIdx, minuteInCell);
+        const snapped = snapTotalMinutes(rowIdx, minuteInCell, snapStep);
         const clampedColIdx = Math.max(colStart, Math.min(colEnd - 1, colIdx));
         
         return {
@@ -1491,7 +1491,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     const hour = Math.floor(relativeY / ROW_HEIGHT);
     const minute = Math.floor((relativeY % ROW_HEIGHT) / (ROW_HEIGHT / 60));
     const colIdx = Math.floor((relativeX - timeColumnWidth) / dayColumnWidth) + colStart;
-    const snapped = snapTotalMinutes(Math.max(0, hour), minute);
+    const snapped = snapTotalMinutes(Math.max(0, hour), minute, snapStep);
     
     return {
       x: e.clientX,
@@ -1503,7 +1503,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   }, [colStart, colEnd, TIME_COL_WIDTH]);
   
   // Step 2: Visual Preview - Calculate drag preview dimensions
-  const calculateDragPreview = useCallback((position, taskData, clickOffsetY = 0) => {
+  const calculateDragPreview = useCallback((position, taskData, clickOffsetY = 0, snapStep = SNAP_MINUTES) => {
     if (!position || !taskData || !scrollWrapperRef.current) {
       return null;
     }
@@ -1522,7 +1522,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     const left = timeColumnWidth + (position.colIdx - colStart) * dayColumnWidth;
     const duration = getItemDurationMinutes(taskData);
     const height = Math.max((duration / 60) * ROW_HEIGHT, 10);
-    const snappedStart = snapStartFromPosition(position, clickOffsetY);
+    const snappedStart = snapStartFromPosition(position, clickOffsetY, snapStep);
     const gridRect = gridRef.current?.getBoundingClientRect();
     const headerHeight = 60;
     let top;
@@ -2057,9 +2057,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     const originX = e.clientX;
     const originY = e.clientY;
     const originRect = blockEl.getBoundingClientRect();
-    const originGridRect = gridEl.getBoundingClientRect();
-    const originPreviewTop = originRect.top - originGridRect.top;
-    const originPreviewLeft = originRect.left - originGridRect.left;
+    const clickOffsetY = originY - originRect.top;
     let moved = false;
     let finished = false;
 
@@ -2105,14 +2103,6 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         if (fromTop < edge) scrollEl.scrollTop -= speedFor(fromTop);
         else if (fromBottom < edge) scrollEl.scrollTop += speedFor(fromBottom);
       }
-      const gridRect = gridEl.getBoundingClientRect();
-      const previewTop = originPreviewTop + (clientY - originY) + (originGridRect.top - gridRect.top);
-      const previewLeft = originPreviewLeft + (clientX - originX) + (originGridRect.left - gridRect.left);
-      const contentY = previewTop - (scrollEl.getBoundingClientRect().top - gridRect.top) + scrollEl.scrollTop;
-      const snapped = Math.min(
-        24 * 60 - COMPACT_DRAG_SNAP_MINUTES,
-        Math.max(0, Math.min(24 * 60, snapMinutes(contentY / ROW_HEIGHT * 60, COMPACT_DRAG_SNAP_MINUTES)))
-      );
       const nextDrag = {
         isActive: true,
         startX: originX,
@@ -2122,24 +2112,48 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         taskData,
         isFromSidebar: false,
         isMovingExistingTask: true,
-        clickOffsetY: originY - originRect.top,
+        clickOffsetY,
       };
       customDragRef.current = nextDrag;
       setCustomDragState(nextDrag);
-      setDragPreviewSynced({
-        left: previewLeft,
-        top: previewTop,
-        width: originRect.width,
-        height: originRect.height,
-        color: getItemColor(source),
-        opacity: 0.55,
-        isShortBlock: originRect.height < 48,
-        startHour: Math.floor(snapped / 60),
-        startMinute: snapped % 60,
-        startMinutes: snapped,
-        duration,
-        colIdx: columnFromClientX(clientX),
-      });
+      const hit = document.elementFromPoint(clientX, clientY);
+      let cell = hit?.closest?.('.calendar-cell') || null;
+      if (!cell || cell.classList.contains('time-column')) {
+        cell = null;
+        const cells = scrollEl.querySelectorAll('.calendar-cell');
+        for (const candidate of cells) {
+          if (candidate.classList.contains('time-column')) continue;
+          const rect = candidate.getBoundingClientRect();
+          if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+            cell = candidate;
+            break;
+          }
+        }
+      }
+      const position = calculatePosition(
+        { clientX, clientY, target: cell || hit },
+        cell,
+        COMPACT_DRAG_SNAP_MINUTES
+      );
+      const preview = position
+        ? calculateDragPreview(position, taskData, clickOffsetY, COMPACT_DRAG_SNAP_MINUTES)
+        : null;
+      if (preview) {
+        let top = preview.top;
+        const rowIdx = cell ? Number(cell.getAttribute('data-row')) : NaN;
+        if (cell && gridEl && !Number.isNaN(rowIdx)) {
+          const gridRect = gridEl.getBoundingClientRect();
+          const cellRect = cell.getBoundingClientRect();
+          top = cellRect.top - gridRect.top
+            + ((preview.startMinutes - rowIdx * 60) / 60) * ROW_HEIGHT;
+        }
+        setDragPreviewSynced({
+          ...preview,
+          top,
+          opacity: 0.55,
+          colIdx: position.colIdx,
+        });
+      }
     };
 
     const finish = ({ save, clientX, clientY }) => {
@@ -2213,7 +2227,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
     window.addEventListener('touchend', onTouchEnd);
     window.addEventListener('touchcancel', onTouchCancel);
-  }, [activeBlockKey, colStart, colEnd, days, onUpdateTask, setDragPreviewSynced, TIME_COL_WIDTH]);
+  }, [activeBlockKey, calculateDragPreview, calculatePosition, colStart, colEnd, days, onUpdateTask, setDragPreviewSynced, TIME_COL_WIDTH]);
 
   // Global mouse event listener to detect sidebar drag start
   useEffect(() => {

@@ -248,7 +248,6 @@ label, div, span, button, select {
 /* Target any elements with focus that shouldn't show carets */
 *:focus:not(input):not(textarea):not([contenteditable="true"]) {
   caret-color: transparent !important;
-  outline: none !important;
 }
 
 /* Circular Time Picker Styles */

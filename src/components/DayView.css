@@ -138,12 +138,12 @@
   z-index: 2;
   user-select: none;
   box-sizing: border-box;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
   transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.day-time-block.is-active,
 .day-time-block.is-selected {
-  box-shadow: 0 0 0 2px #1d4ed8, 0 2px 8px rgba(0, 0, 0, 0.16);
   z-index: 3;
 }
 
@@ -151,6 +151,21 @@ html.layout-compact .day-time-block.is-active,
 html.layout-compact .day-time-block.is-selected {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   touch-action: none;
+}
+
+.day-time-block:focus,
+.day-time-block:focus-visible,
+.day-time-block:active,
+.day-time-block.is-active,
+.day-time-block.is-dragging,
+.day-time-block.is-selected:focus,
+.day-time-block.is-selected:focus-visible,
+.day-time-block.is-selected:active,
+.day-time-block.is-selected.is-active,
+.day-time-block.is-selected.is-dragging {
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .day-time-block.is-dragging {
