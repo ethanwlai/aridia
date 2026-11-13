@@ -51,7 +51,8 @@ const MotivationSlider = ({ motivation, setMotivation }) => {
   const displayValue = isDragging ? dragValue : motivation;
 
   return (
-    <div 
+    <div
+      data-drawer-target="motivation"
       style={{
         marginBottom: '2rem',
         padding: '1rem',

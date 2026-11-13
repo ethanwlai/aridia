@@ -122,9 +122,9 @@ const App = () => {
   const drawerOverlayRef = useRef(null);
   const [pinTodayToken, setPinTodayToken] = useState(0);
   const [freezeAgendaToken, setFreezeAgendaToken] = useState(0);
-  const [chevronHover, setChevronHover] = useState(false);
   const [selectedDashboardButton, setSelectedDashboardButton] = useState(null);
   const [chevronVisible, setChevronVisible] = useState(true);
+  const [drawerSection, setDrawerSection] = useState('agenda');
   
   // Calendar navigation state - shared between CalendarGrid and Sidebar
   const [centerDay, setCenterDay] = useState(() => {
@@ -549,7 +549,8 @@ const App = () => {
     if (prefersReducedMotion()) setDrawerPresent(false);
   }, []);
 
-  const openDrawer = useCallback(() => {
+  const openDrawer = useCallback((section = 'agenda') => {
+    setDrawerSection(section === 'tasks' ? 'tasks' : 'agenda');
     setCenterDay(startOfDay(new Date()));
     setFocusNowToken((n) => n + 1);
     setPinTodayToken((n) => n + 1);
@@ -559,9 +560,9 @@ const App = () => {
   }, []);
 
   const toggleDrawer = useCallback(() => {
-    if (drawerOpen) closeDrawer();
-    else openDrawer();
-  }, [drawerOpen, closeDrawer, openDrawer]);
+    if (drawerOpen && drawerSection === 'tasks') closeDrawer();
+    else openDrawer('tasks');
+  }, [drawerOpen, drawerSection, closeDrawer, openDrawer]);
 
   const suppressDrawerClickRef = useDrawerEdgeSwipe({
     enabled: isDrawerChrome,
@@ -627,6 +628,44 @@ const App = () => {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [drawerOpen, closeDrawer]);
+
+  const scrollDrawerSection = useCallback((section, behavior) => {
+    const root = drawerOverlayRef.current;
+    if (!root) return;
+    if (section === 'tasks') {
+      const panel = root.querySelector('.dashboard-panel');
+      const motivation = panel?.querySelector('[data-drawer-target="motivation"]');
+      if (!panel) return;
+      const top = motivation
+        ? Math.max(0, panel.scrollTop + motivation.getBoundingClientRect().top - panel.getBoundingClientRect().top - 8)
+        : 0;
+      panel.scrollTo({ top, behavior });
+      return;
+    }
+    const scroller = root.querySelector('[data-agenda-scroll]');
+    if (!scroller) return;
+    const now = new Date();
+    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const todayBlock = scroller.querySelector(`[data-date="${todayKey}"]`);
+    const top = todayBlock
+      ? Math.max(0, scroller.scrollTop + todayBlock.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 8)
+      : 0;
+    scroller.scrollTo({ top, behavior });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isDrawerChrome || !drawerShown || drawerSection !== 'agenda') return undefined;
+    const behavior = prefersReducedMotion() ? 'auto' : 'smooth';
+    const id = requestAnimationFrame(() => scrollDrawerSection('agenda', behavior));
+    return () => cancelAnimationFrame(id);
+  }, [isDrawerChrome, drawerShown, drawerSection, scrollDrawerSection]);
+
+  useLayoutEffect(() => {
+    if (!isDrawerChrome || !drawerShown || drawerSection !== 'tasks') return undefined;
+    const behavior = prefersReducedMotion() ? 'auto' : 'smooth';
+    const id = requestAnimationFrame(() => scrollDrawerSection('tasks', behavior));
+    return () => cancelAnimationFrame(id);
+  }, [isDrawerChrome, drawerShown, drawerSection, selectedDashboardButton, scrollDrawerSection]);
 
   const openDayView = useCallback((date) => {
     setPanelDate(null);
@@ -1019,11 +1058,28 @@ const App = () => {
     : Math.max(0, mainLayoutWidth - 360 - TIME_COL_WIDTH - COMFORTABLE_COL_WIDTH);
   const dashboardWidth = isDrawerChrome ? 0 : dragProgress * dashboardMaxWidth;
   const dashboardContentWidth = Math.max(0, dashboardMaxWidth + sidebarBaseWidth - SIDEBAR_COLUMN_WIDTH);
-  const chevronInset = 62 + dragProgress * (94 - 62);
-  const chevronLeft = sidebarBaseWidth + dashboardWidth - chevronInset;
-  const chevronOpacity = dragProgress > 0
-    ? (chevronVisible ? 1 : 0)
-    : (chevronHover ? 0.8 : 1);
+  const seamHidden = dragProgress > 0 && !chevronVisible;
+
+  const toggleDashboard = useCallback(() => {
+    setDragProgress((prev) => (prev < 1 ? 1 : 0));
+  }, []);
+
+  useEffect(() => {
+    if (isDrawerChrome) return undefined;
+    const onKey = (event) => {
+      if (event.key !== 't' && event.key !== 'T') return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return;
+      }
+      event.preventDefault();
+      toggleDashboard();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isDrawerChrome, toggleDashboard]);
 
   // Drag event handlers (with snap). Transitions stay off while the pointer
   // is down so the shell tracks 1:1; mouseup restores the ease for the snap.
@@ -1088,6 +1144,7 @@ const App = () => {
             >
               <div
                 className={isDrawerChrome ? 'app-drawer' : undefined}
+                data-section={isDrawerChrome ? drawerSection : undefined}
                 onClick={isDrawerChrome ? (e) => e.stopPropagation() : undefined}
                 onTransitionEnd={isDrawerChrome ? (event) => {
                   if (event.target !== event.currentTarget) return;
@@ -1103,6 +1160,37 @@ const App = () => {
                   background: '#2e0066',
                 }}
               >
+              {isDrawerChrome && (
+                <div className="drawer-section-jumps" role="tablist" aria-label="Agenda and tasks">
+                  <button
+                    type="button"
+                    role="tab"
+                    className={drawerSection === 'agenda' ? 'is-active' : ''}
+                    aria-selected={drawerSection === 'agenda'}
+                    onClick={() => {
+                      setDrawerSection('agenda');
+                      const behavior = prefersReducedMotion() ? 'auto' : 'smooth';
+                      requestAnimationFrame(() => scrollDrawerSection('agenda', behavior));
+                    }}
+                  >
+                    Agenda
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    className={drawerSection === 'tasks' ? 'is-active' : ''}
+                    aria-selected={drawerSection === 'tasks'}
+                    title="Tasks and motivation"
+                    onClick={() => {
+                      setDrawerSection('tasks');
+                      const behavior = prefersReducedMotion() ? 'auto' : 'smooth';
+                      requestAnimationFrame(() => scrollDrawerSection('tasks', behavior));
+                    }}
+                  >
+                    Tasks
+                  </button>
+                </div>
+              )}
               <Sidebar 
           tasks={tasks} 
           onDelete={deleteTask} 
@@ -1128,7 +1216,6 @@ const App = () => {
                   width: '100%',
                   minWidth: 0,
                   maxWidth: 'none',
-                  maxHeight: '100%',
                   background: '#2e0066',
                   color: 'white',
                   overflow: 'auto',
@@ -1431,27 +1518,28 @@ const App = () => {
                 }}
                 style={{ left: sidebarBaseWidth + dashboardWidth }}
               />
-              <div
-                className="dashboard-chevron"
-                onMouseDown={handleDragStart}
-                onMouseEnter={() => setChevronHover(true)}
-                onMouseLeave={() => setChevronHover(false)}
-                onDoubleClick={() => {
-                  setDragProgress(prev => (prev < 1 ? 1 : 0));
-                }}
+              <button
+                type="button"
+                className={`dashboard-seam-tab${dragProgress >= 1 ? ' is-open' : ''}`}
+                onClick={toggleDashboard}
+                aria-expanded={dragProgress > 0}
+                aria-label="Tasks and motivation"
+                title="Tasks and motivation"
                 style={{
-                  left: chevronLeft,
-                  opacity: chevronOpacity,
-                  pointerEvents: dragProgress > 0 && !chevronVisible ? 'none' : 'auto',
+                  opacity: seamHidden ? 0 : 1,
+                  pointerEvents: seamHidden ? 'none' : 'auto',
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="15 18 9 12 15 6" />
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M9 6h11" />
+                  <path d="M9 12h11" />
+                  <path d="M9 18h11" />
+                  <path d="M4.2 6.2l1.1 1.1L7.6 5" />
+                  <path d="M4.2 12.2l1.1 1.1L7.6 11" />
+                  <path d="M4.2 18.2l1.1 1.1L7.6 17" />
                 </svg>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 6 15 12 9 18" />
-                </svg>
-              </div>
+                <span>Tasks</span>
+              </button>
               </>
               )}
               </div>
@@ -1476,7 +1564,9 @@ const App = () => {
                 compactChrome={isDrawerChrome}
                 isCompact={isCompact}
                 onOpenDrawer={toggleDrawer}
+                onToggleDashboard={toggleDashboard}
                 drawerOpen={drawerOpen}
+                tasksDoorOpen={drawerOpen && drawerSection === 'tasks'}
               />
               {viewMode === 'week' && (
                 <CalendarGrid 
