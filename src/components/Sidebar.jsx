@@ -516,10 +516,10 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
   }, [highlightedItem, tasks, expandDay, expandedDays]);
 
   return (
-    <div className={styles.sidebar}>
+    <div className={styles.sidebar} data-agenda-pane>
       <AccountMenu />
       <Header />
-      <div className={styles.sidebarContent} ref={sidebarContentRef}>
+      <div className={styles.sidebarContent} ref={sidebarContentRef} data-agenda-scroll>
         {allTaskDates.map((date, index) => {
           const isCurrent = isToday(date);
           const label = isCurrent ? 'Today' : format(date, 'EEEE');

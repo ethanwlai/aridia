@@ -15,6 +15,19 @@ const HIDDEN_LOGO_LEFT_INSET = 12;
 const SEARCH_BAR_RIGHT_OFFSET = 24;
 // ═══════════════════════════════════════════════════════════════
 
+function TasksGlyph({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 6h11" />
+      <path d="M9 12h11" />
+      <path d="M9 18h11" />
+      <path d="M4.2 6.2l1.1 1.1L7.6 5" />
+      <path d="M4.2 12.2l1.1 1.1L7.6 11" />
+      <path d="M4.2 18.2l1.1 1.1L7.6 17" />
+    </svg>
+  );
+}
+
 const CalendarHeader = ({
   viewMode,
   setViewMode,
@@ -26,7 +39,9 @@ const CalendarHeader = ({
   compactChrome = false,
   isCompact = false,
   onOpenDrawer,
+  onToggleDashboard,
   drawerOpen = false,
+  tasksDoorOpen = false,
 }) => {
   const [visibleButtons, setVisibleButtons] = useState(4); // Start with all 4 buttons visible
   const [buttonStartIndex, setButtonStartIndex] = useState(0); // Start index for visible buttons
@@ -47,6 +62,7 @@ const CalendarHeader = ({
   const [searchBarWidth, setSearchBarWidth] = useState(240); // Track search bar width for dropdown
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [logoVisible, setLogoVisible] = useState(true);
+  const [tasksChipLayout, setTasksChipLayout] = useState({ left: 148, hidden: false });
   const headerRef = useRef();
   const searchInputRef = useRef();
   const searchContainerRef = useRef();
@@ -54,6 +70,8 @@ const CalendarHeader = ({
   const skipNextSearchRef = useRef(false);
   const logoVisibleRef = useRef(true);
   const logoRef = useRef(null);
+  const tasksChipRef = useRef(null);
+  const tasksChipLayoutRef = useRef({ left: 148, hidden: false });
   const lastVisibleButtonsRef = useRef(4);
   const appliedLayoutRef = useRef({ numButtons: 4, startIndex: 0 });
   const lastButtonPositionRef = useRef({ left: '50%', transform: 'translateX(-50%)' });
@@ -473,24 +491,65 @@ const CalendarHeader = ({
       const logoRightPx = logoBox
         ? logoBox.getBoundingClientRect().right - headerRect.left
         : LOGO_LEFT_INSET + LOGO_WIDTH;
-      const clashAt = logoRightPx + LOGO_BUTTON_GAP;
+      const chipEl = tasksChipRef.current;
+      const chipWidth = chipEl?.offsetWidth || 0;
+      const chipGap = 8;
 
-      const withLogo = layoutHeader(clashAt, true);
+      const placeChip = (left, hidden) => {
+        const rounded = Math.round(left);
+        const prev = tasksChipLayoutRef.current;
+        if (prev.left === rounded && prev.hidden === hidden) return;
+        const next = { left: rounded, hidden };
+        tasksChipLayoutRef.current = next;
+        setTasksChipLayout(next);
+      };
+
+      const fitChip = (layout, chipLeft) => {
+        const clash = chipLeft + chipWidth + chipGap;
+        if (chipWidth === 0) {
+          applyLayout(layout);
+          return;
+        }
+        if (layout.left >= clash) {
+          placeChip(chipLeft, false);
+          applyLayout(layout);
+          return;
+        }
+        const shift = clash - layout.left;
+        const shifted = {
+          ...layout,
+          left: layout.left + shift,
+          center: layout.center + shift,
+          rightmost: layout.rightmost + shift,
+        };
+        if (shifted.rightmost > headerWidth - 8) {
+          placeChip(chipLeft, true);
+          applyLayout(layout);
+          return;
+        }
+        placeChip(chipLeft, false);
+        applyLayout(shifted);
+      };
+
+      const clashWithLogo = logoRightPx + chipGap + chipWidth + LOGO_BUTTON_GAP;
+      const withLogo = layoutHeader(clashWithLogo, true);
       const hideLogo = logoVisibleRef.current
-        ? withLogo.left < clashAt
-        : withLogo.left < clashAt + hysteresisBuffer;
+        ? withLogo.left < clashWithLogo
+        : withLogo.left < clashWithLogo + hysteresisBuffer;
       if (hideLogo) {
         if (logoVisibleRef.current) {
           logoVisibleRef.current = false;
           setLogoVisible(false);
         }
-        applyLayout(layoutHeader(HIDDEN_LOGO_LEFT_INSET, true));
+        const chipLeft = HIDDEN_LOGO_LEFT_INSET;
+        const clashWithChip = chipLeft + chipWidth + LOGO_BUTTON_GAP;
+        fitChip(layoutHeader(clashWithChip, true), chipLeft);
       } else {
         if (!logoVisibleRef.current) {
           logoVisibleRef.current = true;
           setLogoVisible(true);
         }
-        applyLayout(withLogo);
+        fitChip(withLogo, logoRightPx + chipGap);
       }
 
       if (headerWidth !== lastHeaderWidth) {
@@ -654,16 +713,14 @@ const CalendarHeader = ({
     const menuButton = (
       <button
         type="button"
-        className={`calendar-menu-btn${drawerOpen ? ' is-open' : ''}`}
+        className={`calendar-menu-btn calendar-tasks-btn${drawerOpen ? ' is-open' : ''}${isCompact ? '' : ' has-label'}${tasksDoorOpen ? ' is-tasks' : ''}`}
         onClick={onOpenDrawer}
-        aria-label={drawerOpen ? 'Close agenda' : 'Open agenda'}
+        aria-label={tasksDoorOpen ? 'Close tasks' : 'Tasks and motivation'}
         aria-expanded={drawerOpen}
+        title={tasksDoorOpen ? 'Close tasks' : 'Tasks and motivation'}
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-          <line x1="4" y1="7" x2="20" y2="7" />
-          <line x1="4" y1="12" x2="20" y2="12" />
-          <line x1="4" y1="17" x2="20" y2="17" />
-        </svg>
+        <TasksGlyph size={isCompact ? 22 : 18} />
+        {!isCompact && <span>Tasks</span>}
       </button>
     );
     const logoButton = (
@@ -811,6 +868,22 @@ const CalendarHeader = ({
           width={LOGO_WIDTH}
           height={LOGO_HEIGHT}
         />
+      </button>
+      <button
+        type="button"
+        ref={tasksChipRef}
+        className={`calendar-tasks-chip${dashboardFullyOpen ? ' is-open' : ''}${tasksChipLayout.hidden ? ' is-hidden' : ''}`}
+        style={{ left: `${tasksChipLayout.left}px` }}
+        onClick={onToggleDashboard}
+        aria-pressed={dashboardFullyOpen}
+        aria-keyshortcuts="T"
+        aria-label="Tasks and motivation"
+        aria-hidden={tasksChipLayout.hidden}
+        tabIndex={tasksChipLayout.hidden ? -1 : 0}
+        title={dashboardFullyOpen ? 'Close tasks' : 'Tasks and motivation (T)'}
+      >
+        <TasksGlyph size={15} />
+        <span>Tasks</span>
       </button>
       {/* Button container - positioned absolutely to center over calendar grid */}
       {visibleButtons > 0 && (
