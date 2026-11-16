@@ -1160,14 +1160,15 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     return () => cancelAnimationFrame(id);
   }, [focusNowToken]);
 
-  // Navigation handlers with smooth transitions
+  // Navigation handlers with smooth transitions.
+  // Updaters read the latest day so repeated clicks are not collapsed.
   const handlePrevDay = () => {
     setLocatedDay(null);
-    setCenterDay(addDays(centerDay, -1));
+    setCenterDay((day) => addDays(day, -1));
   };
   const handleNextDay = () => {
     setLocatedDay(null);
-    setCenterDay(addDays(centerDay, 1));
+    setCenterDay((day) => addDays(day, 1));
   };
   const handleGoToday = () => {
     setLocatedDay(null);
@@ -1186,17 +1187,16 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     return -1;
   };
 
-  // Determine which columns to show: prioritize keeping "today" visible
-  // When navigated, prioritize centerDay (index 2) instead
+  // Narrow grids show a slice of the 7-day window. Follow the navigated
+  // day (centerDay is index 2). A located day stays in view; Today does not
+  // pin the slice, or chevrons appear stuck until Today scrolls out.
   let colStart = 0;
   let colEnd = days.length;
   if (typeof visibleCols === 'number' && visibleCols < days.length) {
-    // Determine priority column: today if it exists in window, otherwise centerDay (index 2)
-    const todayIndex = getTodayColumnIndex();
     const locatedIndex = locatedDay
       ? days.findIndex((day) => isSameDay(day, locatedDay))
       : -1;
-    const priorityCol = locatedIndex !== -1 ? locatedIndex : (todayIndex !== -1 ? todayIndex : 2);
+    const priorityCol = locatedIndex !== -1 ? locatedIndex : 2;
     
     // Try to center the priority column, ensuring it's always visible
     // Calculate how many columns can fit on each side

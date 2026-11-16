@@ -123,7 +123,6 @@ const App = () => {
   const [pinTodayToken, setPinTodayToken] = useState(0);
   const [freezeAgendaToken, setFreezeAgendaToken] = useState(0);
   const [selectedDashboardButton, setSelectedDashboardButton] = useState(null);
-  const [chevronVisible, setChevronVisible] = useState(true);
   const [drawerSection, setDrawerSection] = useState('agenda');
   
   // Calendar navigation state - shared between CalendarGrid and Sidebar
@@ -503,24 +502,33 @@ const App = () => {
 
   const centerDayRef = useRef(centerDay);
   centerDayRef.current = centerDay;
+  const navigationTimerRef = useRef(null);
 
-  // Smooth navigation function with slide animation
+  // Smooth navigation function with slide animation.
+  // Accepts a Date or an updater so rapid clicks stack on the latest day
+  // instead of the day from the last render.
   const smoothNavigateTo = useCallback((targetDate) => {
-    const next = startOfDay(targetDate);
-    if (isSameDate(centerDayRef.current, next)) return;
+    const current = centerDayRef.current;
+    const resolved = typeof targetDate === 'function' ? targetDate(current) : targetDate;
+    const next = startOfDay(resolved);
+    if (isSameDate(current, next)) return;
 
+    centerDayRef.current = next;
     setIsNavigating(true);
     setCenterDay(next);
 
-    // Reset navigation state after transition completes
-    setTimeout(() => {
+    if (navigationTimerRef.current) clearTimeout(navigationTimerRef.current);
+    navigationTimerRef.current = setTimeout(() => {
+      navigationTimerRef.current = null;
       setIsNavigating(false);
     }, 400); // Slightly longer for better visual effect
   }, []);
 
   const navigateMonth = useCallback((targetDate) => {
-    const next = startOfDay(targetDate);
-    if (!isSameDate(centerDayRef.current, next)) {
+    const current = centerDayRef.current;
+    const resolved = typeof targetDate === 'function' ? targetDate(current) : targetDate;
+    const next = startOfDay(resolved);
+    if (!isSameDate(current, next)) {
       setFreezeAgendaToken((n) => n + 1);
     }
     smoothNavigateTo(targetDate);
@@ -1058,7 +1066,6 @@ const App = () => {
     : Math.max(0, mainLayoutWidth - 360 - TIME_COL_WIDTH - COMFORTABLE_COL_WIDTH);
   const dashboardWidth = isDrawerChrome ? 0 : dragProgress * dashboardMaxWidth;
   const dashboardContentWidth = Math.max(0, dashboardMaxWidth + sidebarBaseWidth - SIDEBAR_COLUMN_WIDTH);
-  const seamHidden = dragProgress > 0 && !chevronVisible;
 
   const toggleDashboard = useCallback(() => {
     setDragProgress((prev) => (prev < 1 ? 1 : 0));
@@ -1229,10 +1236,6 @@ const App = () => {
                   borderRadius: '16px',
                 } : {
                   pointerEvents: dragProgress > 0 ? 'auto' : 'none',
-                }}
-                onScroll={(e) => {
-                  const scrollTop = e.target.scrollTop;
-                  setChevronVisible(scrollTop < 10); // Hide chevron when scrolled more than 10px
                 }}
               >
                 <div
@@ -1507,8 +1510,7 @@ const App = () => {
                 </div>
               </div>
               {!isDrawerChrome && (
-              <>
-              {/* Vertical drag line (full height, invisible but interactive) */}
+              /* Vertical drag line (full height, invisible but interactive) */
               <div
                 ref={dragHandleRef}
                 className="dashboard-resize-handle"
@@ -1518,29 +1520,6 @@ const App = () => {
                 }}
                 style={{ left: sidebarBaseWidth + dashboardWidth }}
               />
-              <button
-                type="button"
-                className={`dashboard-seam-tab${dragProgress >= 1 ? ' is-open' : ''}`}
-                onClick={toggleDashboard}
-                aria-expanded={dragProgress > 0}
-                aria-label="Tasks and motivation"
-                title="Tasks and motivation"
-                style={{
-                  opacity: seamHidden ? 0 : 1,
-                  pointerEvents: seamHidden ? 'none' : 'auto',
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M9 6h11" />
-                  <path d="M9 12h11" />
-                  <path d="M9 18h11" />
-                  <path d="M4.2 6.2l1.1 1.1L7.6 5" />
-                  <path d="M4.2 12.2l1.1 1.1L7.6 11" />
-                  <path d="M4.2 18.2l1.1 1.1L7.6 17" />
-                </svg>
-                <span>Tasks</span>
-              </button>
-              </>
               )}
               </div>
             </div>
