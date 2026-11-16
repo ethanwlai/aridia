@@ -12,6 +12,7 @@ const LOGO_WIDTH = Math.round(LOGO_HEIGHT * (286 / 138)); // native 286×138, ke
 const LOGO_LEFT_INSET = 32;
 const LOGO_BUTTON_GAP = 12;
 const HIDDEN_LOGO_LEFT_INSET = 12;
+const TASKS_CHIP_NUDGE = 20; // Extra offset so the desktop Tasks chip sits further right of the logo
 const SEARCH_BAR_RIGHT_OFFSET = 24;
 // ═══════════════════════════════════════════════════════════════
 
@@ -62,7 +63,7 @@ const CalendarHeader = ({
   const [searchBarWidth, setSearchBarWidth] = useState(240); // Track search bar width for dropdown
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [logoVisible, setLogoVisible] = useState(true);
-  const [tasksChipLayout, setTasksChipLayout] = useState({ left: 148, hidden: false });
+  const [tasksChipLayout, setTasksChipLayout] = useState({ left: 168, hidden: false });
   const headerRef = useRef();
   const searchInputRef = useRef();
   const searchContainerRef = useRef();
@@ -71,7 +72,7 @@ const CalendarHeader = ({
   const logoVisibleRef = useRef(true);
   const logoRef = useRef(null);
   const tasksChipRef = useRef(null);
-  const tasksChipLayoutRef = useRef({ left: 148, hidden: false });
+  const tasksChipLayoutRef = useRef({ left: 168, hidden: false });
   const lastVisibleButtonsRef = useRef(4);
   const appliedLayoutRef = useRef({ numButtons: 4, startIndex: 0 });
   const lastButtonPositionRef = useRef({ left: '50%', transform: 'translateX(-50%)' });
@@ -531,7 +532,7 @@ const CalendarHeader = ({
         applyLayout(shifted);
       };
 
-      const clashWithLogo = logoRightPx + chipGap + chipWidth + LOGO_BUTTON_GAP;
+      const clashWithLogo = logoRightPx + chipGap + TASKS_CHIP_NUDGE + chipWidth + LOGO_BUTTON_GAP;
       const withLogo = layoutHeader(clashWithLogo, true);
       const hideLogo = logoVisibleRef.current
         ? withLogo.left < clashWithLogo
@@ -541,7 +542,7 @@ const CalendarHeader = ({
           logoVisibleRef.current = false;
           setLogoVisible(false);
         }
-        const chipLeft = HIDDEN_LOGO_LEFT_INSET;
+        const chipLeft = HIDDEN_LOGO_LEFT_INSET + TASKS_CHIP_NUDGE;
         const clashWithChip = chipLeft + chipWidth + LOGO_BUTTON_GAP;
         fitChip(layoutHeader(clashWithChip, true), chipLeft);
       } else {
@@ -549,7 +550,7 @@ const CalendarHeader = ({
           logoVisibleRef.current = true;
           setLogoVisible(true);
         }
-        fitChip(withLogo, logoRightPx + chipGap);
+        fitChip(withLogo, logoRightPx + chipGap + TASKS_CHIP_NUDGE);
       }
 
       if (headerWidth !== lastHeaderWidth) {
@@ -753,8 +754,8 @@ const CalendarHeader = ({
         <div className={headerClass} ref={headerRef}>
           <div className="calendar-header-top">
             <AccountMenu />
-            {menuButton}
             {logoButton}
+            {menuButton}
             {searchExpanded ? (
               <div className="calendar-search-slot" ref={searchContainerRef}>
                 <input
@@ -803,8 +804,8 @@ const CalendarHeader = ({
     return (
       <div className={headerClass} ref={headerRef}>
         <AccountMenu />
-        {menuButton}
         {logoButton}
+        {menuButton}
         {viewControls}
         <button
           type="button"

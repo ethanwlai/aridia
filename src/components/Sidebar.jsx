@@ -382,8 +382,19 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
   const sidebarContentRef = useRef(null);
   const hasSyncedCenterDayRef = useRef(false);
   const suppressCenterScrollRef = useRef(0);
+  const agendaScrollSeqRef = useRef(0);
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
+
+  const scrollAgendaToDate = (dateStr) => {
+    const container = sidebarContentRef.current;
+    if (!container || !dateStr) return;
+    const el = container.querySelector(`[data-date="${dateStr}"]`);
+    if (!el) return;
+    const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    container.scrollTo({ top, behavior: reduceMotion ? 'auto' : 'smooth' });
+  };
 
   const scrollAgendaToToday = () => {
     const container = sidebarContentRef.current;
@@ -467,28 +478,15 @@ const Sidebar = ({ tasks = [], onDelete, onUpdateStatus, centerDay, onItemClick,
       } else {
         hasSyncedCenterDayRef.current = true;
       }
-      
-      // Find the day block that matches the leftmost day
-      const dayBlocks = sidebarContentRef.current.querySelectorAll(`[data-date="${leftmostDayStr}"]`);
-      
-      if (dayBlocks.length > 0) {
-        // Scroll to the leftmost day block
-        dayBlocks[0].scrollIntoView({
-          behavior: 'smooth',
-          block: 'start',
-          inline: 'nearest'
-        });
-      } else {
-        // If leftmost day not found, scroll to the first day block (current week)
-        const firstDayBlock = sidebarContentRef.current.querySelector(`.${styles.dayBlock}`);
-        if (firstDayBlock) {
-          firstDayBlock.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start',
-            inline: 'nearest'
-          });
-        }
-      }
+
+      // Scroll only the agenda scroller, after the calendar has painted.
+      // A newer navigation invalidates this callback.
+      const seq = ++agendaScrollSeqRef.current;
+      const frame = requestAnimationFrame(() => {
+        if (agendaScrollSeqRef.current !== seq) return;
+        scrollAgendaToDate(leftmostDayStr);
+      });
+      return () => cancelAnimationFrame(frame);
     }
   }, [centerDay, expandDay, highlightedItem]); // Trigger when centerDay changes (navigation)
 
