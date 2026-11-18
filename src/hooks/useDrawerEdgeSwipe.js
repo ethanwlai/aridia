@@ -5,7 +5,7 @@ const SLOP_PX = 10;
 const OPEN_PROGRESS = 0.4;
 const FLICK_PX_PER_MS = 0.4;
 const BLOCKED_START = '.create-sheet, .create-sheet-overlay, .day-detail-panel--sheet';
-const INTERACTIVE = 'button, a, input, textarea, select, [role="slider"]';
+const INTERACTIVE = 'button, a, input, textarea, select, [role="slider"], .motivation-slider';
 const MENU_BUTTON = '.calendar-menu-btn';
 
 function prefersReducedMotion() {
