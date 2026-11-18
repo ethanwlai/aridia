@@ -1141,6 +1141,10 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
+html.layout-compact .motivation-slider-track {
+  touch-action: none;
+}
+
 /* Prevent focus and hover effects on non-interactive motivation slider elements */
 [tabindex="-1"] {
   outline: none !important;

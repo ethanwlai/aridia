@@ -2,6 +2,7 @@
 import React from 'react';
 import { format } from 'date-fns';
 import TaskActionsDropdown from './TaskActionsDropdown';
+import { useLayoutMode } from '../hooks/useLayoutMode';
 
 // Utility: Parse YYYY-MM-DD as local date (same as Sidebar)
 function parseLocalDate(dateStr) {
@@ -24,6 +25,7 @@ function parseLocalDate(dateStr) {
 }
 
 const TaskList = ({ tasks, title = 'Task List', onDelete, onEdit, onUpdateStatus, onAutoSchedule, onQuickMove, onExtendDuration, onLocateItem, listFocus = null }) => {
+  const { isCompact } = useLayoutMode();
   const filteredTasks = tasks || [];
   const focusInList = Boolean(
     listFocus && filteredTasks.some((task) => task.id === listFocus.id && task.type === listFocus.type)
@@ -125,7 +127,8 @@ const TaskList = ({ tasks, title = 'Task List', onDelete, onEdit, onUpdateStatus
       background: 'rgba(160, 132, 232, 0.1)',
       borderRadius: '8px',
       border: '1px solid rgba(160, 132, 232, 0.2)',
-      cursor: 'default'
+      cursor: 'default',
+      ...(isCompact ? { width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' } : {}),
     }}>
       {(!filteredTasks || filteredTasks.length === 0) ? (
         <div style={{
@@ -149,7 +152,13 @@ const TaskList = ({ tasks, title = 'Task List', onDelete, onEdit, onUpdateStatus
             {title}
           </div>
           
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', cursor: 'default' }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.75rem',
+            cursor: 'default',
+            ...(isCompact ? { minWidth: 0, paddingTop: 10, paddingLeft: 10 } : {}),
+          }}>
             {filteredTasks.map((task, index) => {
               let formattedDate = 'Invalid';
               try {
@@ -193,8 +202,9 @@ const TaskList = ({ tasks, title = 'Task List', onDelete, onEdit, onUpdateStatus
                     position: 'relative',
                     cursor: 'pointer',
                     opacity: focusInList && !selected ? 0.3 : 1,
-                    transform: selected ? 'scale(1.02)' : 'scale(1)',
+                    transform: isCompact ? 'none' : (selected ? 'scale(1.02)' : 'scale(1)'),
                     transition: 'opacity 0.2s ease, transform 0.2s ease',
+                    ...(isCompact ? { width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' } : {}),
                   }}
                 >
                    {/* Task Number */}
@@ -239,23 +249,27 @@ const TaskList = ({ tasks, title = 'Task List', onDelete, onEdit, onUpdateStatus
                     {/* Task Title and Icons Row */}
                     <div style={{
                       display: 'flex',
-                      alignItems: 'center',
+                      alignItems: isCompact ? 'stretch' : 'center',
+                      flexDirection: isCompact ? 'column' : 'row',
                       justifyContent: 'space-between',
                       marginBottom: '0.75rem',
                       paddingLeft: '1rem',
-                      cursor: 'default'
+                      cursor: 'default',
+                      ...(isCompact ? { gap: '0.5rem', minWidth: 0 } : {}),
                     }}>
                       <div style={{
-                        fontSize: '1.1rem',
+                        fontSize: isCompact ? '1rem' : '1.1rem',
                         fontWeight: 600,
                         color: 'white',
                         cursor: 'default',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
+                        overflow: isCompact ? 'visible' : 'hidden',
+                        textOverflow: isCompact ? 'clip' : 'ellipsis',
+                        whiteSpace: isCompact ? 'normal' : 'nowrap',
+                        overflowWrap: isCompact ? 'anywhere' : 'normal',
                         minWidth: 0,
-                        flex: 1,
-                        marginRight: '0.5rem'
+                        flex: isCompact ? '0 0 auto' : 1,
+                        marginRight: isCompact ? 0 : '0.5rem',
+                        ...(isCompact ? { width: '100%', paddingRight: '2.75rem' } : {}),
                       }}>
                         {task.title}
                       </div>
@@ -266,8 +280,9 @@ const TaskList = ({ tasks, title = 'Task List', onDelete, onEdit, onUpdateStatus
                          alignItems: 'center',
                          gap: '0.5rem',
                          flexWrap: 'wrap',
-                         justifyContent: 'flex-end',
-                         cursor: 'default'
+                         justifyContent: isCompact ? 'flex-start' : 'flex-end',
+                         cursor: 'default',
+                         ...(isCompact ? { maxWidth: '100%', minWidth: 0 } : {}),
                        }}>
                          {task.type === 'task' && (
                          <>
@@ -332,7 +347,7 @@ const TaskList = ({ tasks, title = 'Task List', onDelete, onEdit, onUpdateStatus
                            overflow: 'hidden',
                            textOverflow: 'ellipsis',
                            whiteSpace: 'nowrap',
-                           maxWidth: '80px'
+                           maxWidth: isCompact ? 'none' : '80px'
                          }}>
                            {getTimeFrame(task)}
                          </span>
@@ -350,7 +365,7 @@ const TaskList = ({ tasks, title = 'Task List', onDelete, onEdit, onUpdateStatus
                            overflow: 'hidden',
                            textOverflow: 'ellipsis',
                            whiteSpace: 'nowrap',
-                           maxWidth: '80px'
+                           maxWidth: isCompact ? 'none' : '80px'
                          }}>
                            {formattedDate}
                          </span>

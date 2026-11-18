@@ -1,8 +1,22 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useLayoutMode } from '../hooks/useLayoutMode';
+
+function valueFromClientX(clientX, rect) {
+  const percentage = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  return 1 + (percentage * 4);
+}
+
+function snapMotivation(value) {
+  return Math.min(5, Math.max(1, Math.round(value)));
+}
 
 const MotivationSlider = ({ motivation, setMotivation }) => {
+  const { isCompact } = useLayoutMode();
   const [isDragging, setIsDragging] = useState(false);
   const [dragValue, setDragValue] = useState(motivation);
+  const trackRef = useRef(null);
+  const touchActiveRef = useRef(false);
+  const touchValueRef = useRef(motivation);
 
   const getMotivationColor = (level) => {
     switch (level) {
@@ -41,17 +55,71 @@ const MotivationSlider = ({ motivation, setMotivation }) => {
   };
 
   const handleChange = (e) => {
+    if (touchActiveRef.current) return;
     // For keyboard navigation and accessibility
     const value = Number(e.target.value);
     setMotivation(value);
     setDragValue(value);
   };
 
+  useEffect(() => {
+    if (!isCompact) return undefined;
+    const track = trackRef.current;
+    if (!track) return undefined;
+
+    const onTouchStart = (event) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+      if (event.cancelable) event.preventDefault();
+      const next = valueFromClientX(touch.clientX, track.getBoundingClientRect());
+      touchActiveRef.current = true;
+      touchValueRef.current = next;
+      setIsDragging(true);
+      setDragValue(next);
+    };
+
+    const onTouchMove = (event) => {
+      if (!touchActiveRef.current) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      if (event.cancelable) event.preventDefault();
+      const next = valueFromClientX(touch.clientX, track.getBoundingClientRect());
+      touchValueRef.current = next;
+      setDragValue(next);
+    };
+
+    const onTouchEnd = (event) => {
+      if (!touchActiveRef.current) return;
+      const touch = event.changedTouches?.[0];
+      if (touch) {
+        touchValueRef.current = valueFromClientX(touch.clientX, track.getBoundingClientRect());
+      }
+      const snapped = snapMotivation(touchValueRef.current);
+      touchActiveRef.current = false;
+      setMotivation(snapped);
+      setDragValue(snapped);
+      setIsDragging(false);
+    };
+
+    track.addEventListener('touchstart', onTouchStart, { passive: false });
+    track.addEventListener('touchmove', onTouchMove, { passive: false });
+    track.addEventListener('touchend', onTouchEnd);
+    track.addEventListener('touchcancel', onTouchEnd);
+    return () => {
+      touchActiveRef.current = false;
+      track.removeEventListener('touchstart', onTouchStart);
+      track.removeEventListener('touchmove', onTouchMove);
+      track.removeEventListener('touchend', onTouchEnd);
+      track.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [isCompact, setMotivation]);
+
   // Use dragValue for visual feedback during dragging, motivation for the actual value
   const displayValue = isDragging ? dragValue : motivation;
 
   return (
     <div
+      className={isCompact ? 'motivation-slider' : undefined}
       data-drawer-target="motivation"
       style={{
         marginBottom: '2rem',
@@ -88,7 +156,9 @@ const MotivationSlider = ({ motivation, setMotivation }) => {
         </div>
       </div>
       
-      <div 
+      <div
+        ref={trackRef}
+        className={isCompact ? 'motivation-slider-track' : undefined}
         style={{
           position: 'relative',
           marginBottom: '0.5rem'
