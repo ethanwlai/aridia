@@ -690,6 +690,7 @@ html.layout-compact .frame-box {
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  touch-action: pan-y;
 }
 .calendar-scroll-area::-webkit-scrollbar {
   display: none;
@@ -703,7 +704,7 @@ html.layout-compact .frame-box {
 .calendar-row {
   display: grid;
   grid-template-columns: 80px repeat(7, 1fr);
-  min-height: 50px;
+  min-height: var(--cal-hour-height, 50px);
 }
 
 /* === TIME CELLS === */
@@ -715,8 +716,11 @@ html.layout-compact .frame-box {
   background: white;
   color: #111;
   font-size: 0.85rem;
-  min-height: 50px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: var(--cal-hour-height, 50px);
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .calendar-cell:first-child {
@@ -1389,15 +1393,16 @@ html.layout-drawer .day-timeline-scroll {
 .calendar-grid--condensed .header-row,
 .calendar-grid--condensed .calendar-grid-body,
 .calendar-grid--condensed .calendar-scroll-area > div {
-  --time-col-width: 48px;
+  --time-col-width: 58px;
 }
 
 .calendar-grid--condensed .calendar-cell.time-column {
-  width: 48px;
-  min-width: 48px;
-  max-width: 48px;
+  width: 58px;
+  min-width: 58px;
+  max-width: 58px;
   padding-left: 0.35rem;
   font-size: 0.7rem;
+  white-space: nowrap;
 }
 
 .calendar-grid--condensed .weekday-label {

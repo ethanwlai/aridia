@@ -15,6 +15,7 @@ import CalendarConflictModal from './components/CalendarConflictModal';
 import './components/CalendarConflictModal.css';
 import CreateSheet from './components/CreateSheet';
 import { useLayoutMode, getLayoutMode } from './hooks/useLayoutMode';
+import { CalendarZoomProvider } from './hooks/useCalendarPinchZoom';
 import useDrawerEdgeSwipe from './hooks/useDrawerEdgeSwipe';
 import { useAuth } from './context/AuthContext';
 import { sortEventsByDeadline, sortTasks } from './utils/taskSorter';
@@ -1547,6 +1548,7 @@ const App = () => {
                 drawerOpen={drawerOpen}
                 tasksDoorOpen={drawerOpen && drawerSection === 'tasks'}
               />
+              <CalendarZoomProvider>
               {viewMode === 'week' && (
                 <CalendarGrid 
                   onAdd={addTask} 
@@ -1631,6 +1633,7 @@ const App = () => {
                   )}
                 </div>
               )}
+              </CalendarZoomProvider>
             </div>
           </div>
         </div>

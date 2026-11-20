@@ -11,6 +11,7 @@ import CreateSheet from './CreateSheet';
 import CalendarViewNav from './CalendarViewNav';
 import { assignOverlapLanes, getLanedBlockBounds, BLOCK_V_GAP, formatShortTimeRange, SHORT_BLOCK, getItemColor, snapMinutes, getItemDurationMinutes, formatMinutes, toggleCalendarHighlight, isCalendarHighlighted, startOfDay, scrollHighlightedIntoView, highlightedTaskSelector } from '../utils/calendarItems';
 import { useLayoutMode } from '../hooks/useLayoutMode';
+import { BASE_HOUR_HEIGHT, useCalendarPinchZoom } from '../hooks/useCalendarPinchZoom';
 
 // Global drag state to bypass getData() limitations
 window.globalDragState = window.globalDragState || { 
@@ -22,7 +23,6 @@ window.globalDragState = window.globalDragState || {
 };
 
 const hours = Array.from({ length: 24 }, (_, i) => i);
-const ROW_HEIGHT = 50;
 const SNAP_MINUTES = 5;
 const DRAG_ARM_THRESHOLD = 6;
 const COMPACT_DRAG_SNAP_MINUTES = 15;
@@ -179,9 +179,9 @@ function getHoveredCalendarCell(e) {
   return stack.find((el) => el.classList?.contains('calendar-cell') && !el.classList.contains('time-column')) || null;
 }
 
-function snapStartFromPosition(position, clickOffsetY = 0, snapStep = SNAP_MINUTES) {
+function snapStartFromPosition(position, clickOffsetY = 0, snapStep = SNAP_MINUTES, hourHeight = BASE_HOUR_HEIGHT) {
   const cursorMinutes = position.hour * 60 + position.minute;
-  const offsetMinutes = (clickOffsetY / ROW_HEIGHT) * 60;
+  const offsetMinutes = (clickOffsetY / hourHeight) * 60;
   const maxStart = 24 * 60 - snapStep;
   const clamped = Math.max(0, Math.min(maxStart, snapMinutes(cursorMinutes - offsetMinutes, snapStep)));
   return {
@@ -212,7 +212,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
 
   // Minimum column width (matches .calendar-cell min-width or actual width)
   const MIN_COL_WIDTH = 120; // px, adjust as needed for your design
-  const TIME_COL_WIDTH = condensedWeek ? 48 : 80;
+  const TIME_COL_WIDTH = condensedWeek ? 58 : 80;
 
   // Responsive logic: update visibleCols on grid resize
   useEffect(() => {
@@ -261,6 +261,11 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   const scrollWrapperRef = useRef();
   const scrolledLocateRef = useRef(0);
   const ignoreScrollRef = useRef(false);
+  const onPinchStartRef = useRef(() => {});
+  const { rowHeight, rowHeightRef, pinchActiveRef } = useCalendarPinchZoom(scrollWrapperRef, {
+    onPinchStartRef,
+    ignoreScrollRef,
+  });
   // State for debug red dot
   const [debugDot, setDebugDot] = useState(null);
   // Track if user has scrolled
@@ -338,8 +343,8 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
       const scrollArea = scrollWrapperRef.current;
       const scrollRect = scrollArea.getBoundingClientRect();
       const gridRect = gridRef.current.getBoundingClientRect();
-      const blockTop = scrollRect.top + (cardPos.startMinutes / 60) * ROW_HEIGHT - scrollArea.scrollTop;
-      const blockBottom = blockTop + ((cardPos.endMinutes - cardPos.startMinutes) / 60) * ROW_HEIGHT;
+      const blockTop = scrollRect.top + (cardPos.startMinutes / 60) * rowHeightRef.current - scrollArea.scrollTop;
+      const blockBottom = blockTop + ((cardPos.endMinutes - cardPos.startMinutes) / 60) * rowHeightRef.current;
       const gap = 8;
       const spaceAbove = blockTop - scrollRect.top;
       const spaceBelow = scrollRect.bottom - blockBottom;
@@ -369,7 +374,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         bubbleHeight: measuredH,
       };
     });
-  }, [cardPos, cardKey, createViewportTick, fallbackBubbleToSheet]);
+  }, [cardPos, cardKey, createViewportTick, fallbackBubbleToSheet, rowHeight]);
 
   useEffect(() => {
     const el = scrollWrapperRef.current;
@@ -530,7 +535,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     const el = scrollWrapperRef.current;
     if (!el) return 0;
     const rect = el.getBoundingClientRect();
-    return ((clientY - rect.top + el.scrollTop) / ROW_HEIGHT) * 60;
+    return ((clientY - rect.top + el.scrollTop) / rowHeightRef.current) * 60;
   }
 
   function datesForRange(day, startMinutes, endMinutes) {
@@ -767,8 +772,8 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     }
 
     const gap = 8;
-    const blockHeight = ((endMinutes - startMinutes) / 60) * ROW_HEIGHT;
-    const contentTop = (startMinutes / 60) * ROW_HEIGHT;
+    const blockHeight = ((endMinutes - startMinutes) / 60) * rowHeightRef.current;
+    const contentTop = (startMinutes / 60) * rowHeightRef.current;
     const padding = 8;
     const maxScroll = Math.max(0, scrollArea.scrollHeight - scrollArea.clientHeight);
     let nextScroll = scrollArea.scrollTop;
@@ -845,6 +850,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   }
 
   function handleCreatePointerDown(e) {
+    if (pinchActiveRef.current) return;
     if (e.button != null && e.button !== 0) return;
     if (e.target.closest('.calendar-time-block, .task-creation-card, .create-sheet, .create-sheet-overlay')) return;
     if (cardPos || cardRef.current?.contains(e.target)) return;
@@ -1115,7 +1121,6 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   }, [onAdd]);
 
   // Helper: get vertical position for current time in px
-  const rowHeight = 50; // px, matches .calendar-row min-height
   const getCurrentTimePosition = () => {
     const now = new Date();
     const hour = now.getHours();
@@ -1252,6 +1257,26 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   onHighlightItemRef.current = onHighlightItem;
   const stopWeekGestureRef = useRef(null);
 
+  onPinchStartRef.current = () => {
+    detachCreateGestureRef.current?.();
+    stopWeekGestureRef.current?.();
+    cancelPendingClickCreate();
+    swallowCreateClickRef.current = true;
+    window.setTimeout(() => {
+      swallowCreateClickRef.current = false;
+    }, 400);
+    if (scrollWrapperRef.current) scrollWrapperRef.current.style.touchAction = '';
+    if (customDragRef.current?.isActive) {
+      customDragRef.current = INACTIVE_CUSTOM_DRAG;
+      setCustomDragState(INACTIVE_CUSTOM_DRAG);
+      dragPreviewRef.current = null;
+      setDragPreview(null);
+      setIsMovingTask(false);
+      setMovedTaskId(null);
+    }
+    setDragState((prev) => (prev.isActive ? { isActive: false, position: null } : prev));
+  };
+
   const setDragPreviewSynced = useCallback((preview) => {
     dragPreviewRef.current = preview;
     setDragPreview(preview);
@@ -1288,6 +1313,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   
   // Handle wheel events during drag to enable scrolling
   const handleWheel = useCallback((e) => {
+    if (e.ctrlKey) return;
     if (dragState.isActive && scrollWrapperRef.current) {
       e.preventDefault();
       e.stopPropagation();
@@ -1307,6 +1333,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   // Add a more aggressive wheel handler that works during drag
   useEffect(() => {
     const handleWheelDuringDrag = (e) => {
+      if (e.ctrlKey) return;
       if (customDragState.isActive && scrollWrapperRef.current) {
         e.preventDefault();
         e.stopPropagation();
@@ -1483,13 +1510,15 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     }
     
     // Optimized calculations with fewer operations
-    const relativeY = e.clientY - rect.top;
+    const scrollEl = scrollWrapperRef.current;
+    const includeScroll = scrollEl && (!e.currentTarget || e.currentTarget === scrollEl);
+    const relativeY = e.clientY - rect.top + (includeScroll ? scrollEl.scrollTop : 0);
     const relativeX = e.clientX - rect.left;
     const timeColumnWidth = TIME_COL_WIDTH;
     const dayColumnWidth = (rect.width - timeColumnWidth) / (colEnd - colStart);
     
-    const hour = Math.floor(relativeY / ROW_HEIGHT);
-    const minute = Math.floor((relativeY % ROW_HEIGHT) / (ROW_HEIGHT / 60));
+    const hour = Math.floor(relativeY / rowHeightRef.current);
+    const minute = Math.floor((relativeY % rowHeightRef.current) / (rowHeightRef.current / 60));
     const colIdx = Math.floor((relativeX - timeColumnWidth) / dayColumnWidth) + colStart;
     const snapped = snapTotalMinutes(Math.max(0, hour), minute, snapStep);
     
@@ -1521,17 +1550,17 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
     // Calculate position - match the exact calculation used for real blocks
     const left = timeColumnWidth + (position.colIdx - colStart) * dayColumnWidth;
     const duration = getItemDurationMinutes(taskData);
-    const height = Math.max((duration / 60) * ROW_HEIGHT, 10);
-    const snappedStart = snapStartFromPosition(position, clickOffsetY, snapStep);
+    const height = Math.max((duration / 60) * rowHeightRef.current, 10);
+    const snappedStart = snapStartFromPosition(position, clickOffsetY, snapStep, rowHeightRef.current);
     const gridRect = gridRef.current?.getBoundingClientRect();
     const headerHeight = 60;
     let top;
     if (position.cellRect && gridRect && typeof position.rowIdx === 'number') {
       top = position.cellRect.top - gridRect.top
-        + ((snappedStart.startMinutes - position.rowIdx * 60) / 60) * ROW_HEIGHT;
+        + ((snappedStart.startMinutes - position.rowIdx * 60) / 60) * rowHeightRef.current;
     } else {
       const scrollAreaTop = gridRect ? scrollRect.top - gridRect.top : headerHeight;
-      top = scrollAreaTop + (snappedStart.startMinutes / 60) * ROW_HEIGHT - scrollWrapperRef.current.scrollTop;
+      top = scrollAreaTop + (snappedStart.startMinutes / 60) * rowHeightRef.current - scrollWrapperRef.current.scrollTop;
     }
     
     // Check if this is a short block (less than 48px height, which is roughly 36 minutes)
@@ -1900,7 +1929,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
             hour: preview.startHour,
             minute: preview.startMinute,
           }
-        : snapStartFromPosition(position || { hour: 0, minute: 0 }, drag.clickOffsetY);
+        : snapStartFromPosition(position || { hour: 0, minute: 0 }, drag.clickOffsetY, SNAP_MINUTES, rowHeightRef.current);
 
       const startMinutes = snappedStart.startMinutes;
       const endTotalMinutes = startMinutes + duration;
@@ -1953,6 +1982,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
   }, [calculatePosition, calculateDragPreview, setDragPreviewSynced]);
 
   const armWeekBlockGesture = useCallback((e, block, blockKey) => {
+    if (pinchActiveRef.current) return;
     stopWeekGestureRef.current?.();
     const source = block._group ? block.tasks[0] : block;
     const taskData = taskDataFromBlock(block);
@@ -2145,7 +2175,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
           const gridRect = gridEl.getBoundingClientRect();
           const cellRect = cell.getBoundingClientRect();
           top = cellRect.top - gridRect.top
-            + ((preview.startMinutes - rowIdx * 60) / 60) * ROW_HEIGHT;
+            + ((preview.startMinutes - rowIdx * 60) / 60) * rowHeightRef.current;
         }
         setDragPreviewSynced({
           ...preview,
@@ -2319,6 +2349,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         flex: 1,
         background: 'white',
         cursor: 'default',
+        '--cal-hour-height': `${rowHeight}px`,
       }}
     >
       {getTodayColumnIndex() === -1 ? (
@@ -2388,7 +2419,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
           style={{
             display: 'grid',
             gridTemplateColumns: `${TIME_COL_WIDTH}px repeat(${numDayCols}, 1fr)`,
-            gridAutoRows: 'minmax(50px, auto)',
+            gridAutoRows: `${rowHeight}px`,
             position: 'relative',
           }}
         >
@@ -2405,9 +2436,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                 }}
                 onMouseDown={e => e.preventDefault()}
               >
-                {condensedWeek
-                  ? (hour === 0 || hour === 12 ? '12' : String(hour % 12))
-                  : format(new Date(0, 0, 0, hour), 'h aa')}
+                {format(new Date(0, 0, 0, hour), 'h aa')}
               </div>
               {days.slice(colStart, colEnd).map((_, idx) => {
                 const realIdx = colStart + idx;
@@ -2430,7 +2459,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
         {/* Current time indicator */}
         <CurrentTimeIndicator
           getCurrentTimePosition={getCurrentTimePosition}
-          rowHeight={50}
+          rowHeight={rowHeight}
           todayColIndex={getTodayColumnIndex()}
           colStart={colStart}
           colEnd={colEnd}
@@ -2478,9 +2507,9 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
             0,
             1
           );
-          const top = (range.startMinutes / 60) * ROW_HEIGHT;
+          const top = (range.startMinutes / 60) * rowHeightRef.current;
           const height = Math.max(
-            ((Math.min(range.endMinutes, 24 * 60) - range.startMinutes) / 60) * ROW_HEIGHT,
+            ((Math.min(range.endMinutes, 24 * 60) - range.startMinutes) / 60) * rowHeightRef.current,
             SHORT_BLOCK.weekMinHeight
           );
           const endLabel = range.endMinutes >= 24 * 60 ? '00:00' : formatMinutes(range.endMinutes);
@@ -2787,6 +2816,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
                     caretColor: 'transparent',
                   }}
                   onPointerDown={e => {
+                    if (pinchActiveRef.current) return;
                     cancelPendingClickCreate();
                     // Don't set active block if clicking on buttons / actions menu
                     if (
@@ -3741,7 +3771,7 @@ function CalendarGrid({ onAdd, tasks = [], visibleCols: _visibleCols, onDelete, 
             style={{
               position: 'absolute',
               left: TIME_COL_WIDTH + (dragState.position.colIdx - colStart) * ((gridRef.current?.offsetWidth || 800) - TIME_COL_WIDTH) / (colEnd - colStart),
-              top: dragState.position.hour * 50 + (dragState.position.minute / 60) * 50,
+              top: dragState.position.hour * rowHeight + (dragState.position.minute / 60) * rowHeight,
               width: 4,
               height: 4,
               background: 'lime',

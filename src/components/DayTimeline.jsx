@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { format } from 'date-fns';
 import TaskActionsDropdown from './TaskActionsDropdown';
 import ShortBlockLabel from './ShortBlockLabel';
 import StackedBlockLabel from './StackedBlockLabel';
@@ -24,8 +25,8 @@ import {
   timeUpdatesForDrop,
   toggleCalendarHighlight,
 } from '../utils/calendarItems';
+import { useCalendarPinchZoom } from '../hooks/useCalendarPinchZoom';
 
-const ROW_HEIGHT = 50;
 const TIME_COL_WIDTH = 72;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const SCROLL_EDGE = 48;
@@ -58,20 +59,20 @@ function rangeFromCreateDrag(originMinutes, currentMinutes) {
   return { startMinutes: start, endMinutes: end };
 }
 
-function getBlockGeometry(item) {
+function getBlockGeometry(item, rowHeight) {
   const start = parseTimeToMinutes(item.startTime);
   if (start == null) return null;
   const duration = getItemDurationMinutes(item);
   return {
-    top: (start / 60) * ROW_HEIGHT,
-    height: getDayBlockHeightPx(duration, ROW_HEIGHT),
+    top: (start / 60) * rowHeight,
+    height: getDayBlockHeightPx(duration, rowHeight),
     start,
     duration,
   };
 }
 
-function previewHeightFor(item) {
-  return getBlockGeometry(item)?.height ?? getDayBlockHeightPx(getItemDurationMinutes(item), ROW_HEIGHT);
+function previewHeightFor(item, rowHeight) {
+  return getBlockGeometry(item, rowHeight)?.height ?? getDayBlockHeightPx(getItemDurationMinutes(item), rowHeight);
 }
 
 export default function DayTimeline({
@@ -98,6 +99,7 @@ export default function DayTimeline({
   locateToken = 0,
 }) {
   const scrollRef = useRef(null);
+  const onPinchStartRef = useRef(() => {});
   const dayColumnRef = useRef(null);
   const [activeId, setActiveId] = useState(null);
   const [nowPos, setNowPos] = useState(null);
@@ -106,6 +108,10 @@ export default function DayTimeline({
   const [colWidth, setColWidth] = useState(0);
   const userHasScrolled = useRef(false);
   const ignoreScrollRef = useRef(false);
+  const { rowHeight, rowHeightRef, pinchActiveRef } = useCalendarPinchZoom(scrollRef, {
+    onPinchStartRef,
+    ignoreScrollRef,
+  });
   const justDraggedRef = useRef(false);
   const dragStateRef = useRef(null);
   const scrolledLocateRef = useRef(0);
@@ -156,7 +162,7 @@ export default function DayTimeline({
 
   const getCurrentTimePosition = useCallback(() => {
     const now = new Date();
-    return (now.getHours() + now.getMinutes() / 60) * ROW_HEIGHT;
+    return (now.getHours() + now.getMinutes() / 60) * rowHeightRef.current;
   }, []);
 
   useEffect(() => {
@@ -168,12 +174,12 @@ export default function DayTimeline({
     update();
     const id = setInterval(update, 10000);
     return () => clearInterval(id);
-  }, [isToday, getCurrentTimePosition, dayStart]);
+  }, [isToday, getCurrentTimePosition, dayStart, rowHeight]);
 
   useEffect(() => {
     if (highlightedItem) return;
     if (userHasScrolled.current || !scrollRef.current) return;
-    const target = isToday ? getCurrentTimePosition() : 8 * ROW_HEIGHT;
+    const target = isToday ? getCurrentTimePosition() : 8 * rowHeightRef.current;
     scrollRef.current.scrollTop = Math.max(0, target - 120);
   }, [dayStart, isToday, getCurrentTimePosition, highlightedItem]);
 
@@ -181,7 +187,7 @@ export default function DayTimeline({
     if (!focusNowToken || !scrollRef.current) return;
     userHasScrolled.current = false;
     ignoreScrollRef.current = true;
-    const target = isToday ? getCurrentTimePosition() : 8 * ROW_HEIGHT;
+    const target = isToday ? getCurrentTimePosition() : 8 * rowHeightRef.current;
     scrollRef.current.scrollTop = Math.max(0, target - 120);
     const id = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -215,7 +221,7 @@ export default function DayTimeline({
     if (!dayColumnRef.current) return 0;
     const rect = dayColumnRef.current.getBoundingClientRect();
     const y = clientY - rect.top;
-    return Math.max(0, Math.min(24 * 60, snapMinutes((y / ROW_HEIGHT) * 60, step)));
+    return Math.max(0, Math.min(24 * 60, snapMinutes((y / rowHeightRef.current) * 60, step)));
   }, []);
 
   const yToMinutes = useCallback((clientY, step = 15) => {
@@ -241,7 +247,7 @@ export default function DayTimeline({
     const scrollRect = scrollEl.getBoundingClientRect();
     const columnTopInContent = column.getBoundingClientRect().top - scrollRect.top + scrollEl.scrollTop;
     const y = clientY + viewportOffset - scrollRect.top + scrollEl.scrollTop - columnTopInContent;
-    let start = snapMinutes((y / ROW_HEIGHT) * 60, CREATE_START_SNAP_MINUTES);
+    let start = snapMinutes((y / rowHeightRef.current) * 60, CREATE_START_SNAP_MINUTES);
     if (!Number.isFinite(start)) return null;
     start = Math.max(0, Math.min(24 * 60, start));
     if (start >= 24 * 60) start = 24 * 60 - CREATE_START_SNAP_MINUTES;
@@ -302,7 +308,13 @@ export default function DayTimeline({
     }
   }, []);
 
+  onPinchStartRef.current = () => {
+    abortAllDrags();
+    stopSelectTapRef.current?.();
+  };
+
   const handleBlockMouseDown = (e, item, options = {}) => {
+    if (pinchActiveRef.current) return;
     if (
       e.target.closest('.task-complete-btn') ||
       e.target.closest('.task-delete-btn') ||
@@ -414,7 +426,7 @@ export default function DayTimeline({
       window.openDropdownRef.current = null;
     }
 
-    const geo = getBlockGeometry(item);
+    const geo = getBlockGeometry(item, rowHeightRef.current);
     if (!geo) return;
     const clickOffsetY = e.clientY - e.currentTarget.getBoundingClientRect().top;
     const dragId = item.id;
@@ -459,7 +471,7 @@ export default function DayTimeline({
         previewStart = yToMinutes(visualTop + columnTop);
       } else {
         const minutes = yToMinutes(clientY - current.clickOffsetY);
-        previewTop = (minutes / 60) * ROW_HEIGHT;
+        previewTop = (minutes / 60) * rowHeightRef.current;
         previewStart = minutes;
       }
       const next = {
@@ -547,6 +559,7 @@ export default function DayTimeline({
   };
 
   const handleColumnMouseDown = (e) => {
+    if (pinchActiveRef.current) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (e.target.closest('.day-time-block') || e.target.closest('.day-agenda')) return;
 
@@ -719,7 +732,7 @@ export default function DayTimeline({
       const overGrid = isOverScrollArea(e.clientX, e.clientY);
       const next = {
         ...current,
-        previewTop: (minutes / 60) * ROW_HEIGHT,
+        previewTop: (minutes / 60) * rowHeightRef.current,
         previewStart: minutes,
         moved: true,
         overGrid,
@@ -801,11 +814,11 @@ export default function DayTimeline({
           userHasScrolled.current = true;
         }}
       >
-        <div className="day-timeline-grid" style={{ height: 24 * ROW_HEIGHT }}>
+        <div className="day-timeline-grid" style={{ height: 24 * rowHeight }}>
           <div className="day-timeline-hours" style={{ width: TIME_COL_WIDTH }}>
             {HOURS.map((hour) => (
-              <div key={hour} className="day-timeline-hour" style={{ height: ROW_HEIGHT }}>
-                {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
+              <div key={hour} className="day-timeline-hour" style={{ height: rowHeight }}>
+                {format(new Date(0, 0, 0, hour), 'h aa')}
               </div>
             ))}
           </div>
@@ -817,13 +830,13 @@ export default function DayTimeline({
             onPointerDown={handleColumnMouseDown}
           >
             {HOURS.map((hour) => (
-              <div key={hour} className="day-timeline-slot" style={{ height: ROW_HEIGHT }} />
+              <div key={hour} className="day-timeline-slot" style={{ height: rowHeight }} />
             ))}
 
             {isToday && nowPos != null && <NowMarker top={nowPos} />}
 
             {lanedItems.map((item) => {
-              const geo = getBlockGeometry(item);
+              const geo = getBlockGeometry(item, rowHeight);
               if (!geo) return null;
               const isDragging = dragState?.item?.id === item.id && (dragState.moved || dragState.source === 'agenda');
               const top = isDragging && dragState.source !== 'agenda' ? dragState.previewTop : geo.top;
@@ -970,8 +983,8 @@ export default function DayTimeline({
               if (!draftRange) return null;
               const visibleEnd = Math.min(draftRange.endMinutes, 24 * 60);
               const duration = Math.max(CREATE_SNAP_MINUTES, visibleEnd - draftRange.startMinutes);
-              const top = (draftRange.startMinutes / 60) * ROW_HEIGHT;
-              const height = getDayBlockHeightPx(duration, ROW_HEIGHT);
+              const top = (draftRange.startMinutes / 60) * rowHeight;
+              const height = getDayBlockHeightPx(duration, rowHeight);
               const { left, width } = getLanedBlockBounds(
                 0,
                 colWidth || dayColumnRef.current?.clientWidth || 320,
@@ -1014,7 +1027,7 @@ export default function DayTimeline({
                     top: dragState.previewTop,
                     left,
                     width,
-                    height: previewHeightFor(dragState.item),
+                    height: previewHeightFor(dragState.item, rowHeight),
                     background: getItemColor(dragState.item),
                   }}
                 >
