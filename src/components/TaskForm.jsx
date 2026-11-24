@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import './TaskForm.css';
+import { useLayoutMode } from '../hooks/useLayoutMode';
 
 // Circular Time Picker Component
 const CircularTimePicker = ({ value, onChange, onClose, anchorRef, open, timePickerTarget }) => {
@@ -901,6 +902,8 @@ const TaskForm = ({
 }) => {
   const ui = TASKFORM_THEMES[variant] || TASKFORM_THEMES.dashboard;
   const isDay = variant === 'day';
+  const { isCompact } = useLayoutMode();
+  const stackEventTimes = !isDay && isCompact;
   // Toggle state. Calendar create locks this to an event.
   const [creationType, setCreationType] = useState(eventOnly || defaultStartTime ? 'event' : 'task'); // 'task' or 'event'
   
@@ -1695,6 +1698,46 @@ const TaskForm = ({
     setDragPriorityValue(value);
   };
 
+  const stackedTimeFieldStyle = {
+    width: '100%',
+    minWidth: 0,
+    maxWidth: '100%',
+    boxSizing: 'border-box'
+  };
+
+  const stackedTimeLabelStyle = {
+    fontSize: '0.9rem',
+    fontWeight: 600,
+    color: ui.label,
+    marginBottom: '0.5rem',
+    textAlign: 'left',
+    display: 'block'
+  };
+
+  const stackedTimeButtonStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: ui.timePillBg,
+    color: ui.timePillText,
+    borderRadius: '12px',
+    padding: '0.75rem 1rem',
+    fontSize: '14px',
+    fontWeight: 600,
+    border: ui.timePillBorder,
+    outline: 'none',
+    textAlign: 'center',
+    minWidth: 0,
+    maxWidth: '100%',
+    height: '50px',
+    cursor: 'pointer',
+    transition: 'background 0.2s',
+    caretColor: 'transparent',
+    userSelect: 'none',
+    width: '100%',
+    boxSizing: 'border-box'
+  };
+
   return (
     <div
       className={isDay ? 'taskform--day' : undefined}
@@ -2065,7 +2108,64 @@ const TaskForm = ({
 
           {/* Time Pills (for events) or Duration Input (for tasks) */}
                       {creationType === 'event' ? (
-            <div className={isDay ? 'taskform-day-field taskform-day-times' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '300px' }}>
+            <div className={isDay ? 'taskform-day-field taskform-day-times' : undefined} style={isDay ? undefined : (stackEventTimes ? {
+              flex: '1 1 100%',
+              minWidth: 0,
+              width: '100%',
+              maxWidth: '100%',
+              boxSizing: 'border-box'
+            } : { flex: '1', minWidth: '300px' })}>
+              {stackEventTimes ? (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1rem',
+                  width: '100%',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  boxSizing: 'border-box'
+                }}>
+                  <div style={stackedTimeFieldStyle}>
+                    <div style={stackedTimeLabelStyle}>Start Time</div>
+                    <span
+                      className={`pill pill-time pill-time-trigger${showTimePicker && timePickerTarget === 'start' ? ' active' : ''}`}
+                      tabIndex={0}
+                      role="button"
+                      title="Pick start time"
+                      ref={startTimePillRef}
+                      onClick={() => {
+                        setShowTimePicker(true);
+                        setTimePickerTarget('start');
+                      }}
+                      style={stackedTimeButtonStyle}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = ui.timePillHover}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = ui.timePillBg}
+                    >
+                      {startTime ? formatTime(startTime, '24') : 'Start'}
+                    </span>
+                  </div>
+                  <div style={stackedTimeFieldStyle}>
+                    <div style={stackedTimeLabelStyle}>End Time</div>
+                    <span
+                      className={`pill pill-time pill-time-trigger${showTimePicker && timePickerTarget === 'end' ? ' active' : ''}`}
+                      tabIndex={0}
+                      role="button"
+                      title="Pick end time"
+                      ref={endTimePillRef}
+                      onClick={() => {
+                        setShowTimePicker(true);
+                        setTimePickerTarget('end');
+                      }}
+                      style={stackedTimeButtonStyle}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = ui.timePillHover}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = ui.timePillBg}
+                    >
+                      {endTime ? formatTime(endTime, '24') : 'End'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+              <>
               <div style={{
                 fontSize: '0.9rem',
                 fontWeight: 600,
@@ -2166,6 +2266,8 @@ const TaskForm = ({
                   </span>
                 </div>
               </div>
+              </>
+              )}
             </div>
           ) : (
           <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '150px' }}>
