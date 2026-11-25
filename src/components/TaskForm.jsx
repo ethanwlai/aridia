@@ -1,10 +1,9 @@
 // src/components/TaskForm.jsx - Updated for debugging
-import React, { useState, useRef, forwardRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, forwardRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import './TaskForm.css';
-import { useLayoutMode } from '../hooks/useLayoutMode';
 
 // Circular Time Picker Component
 const CircularTimePicker = ({ value, onChange, onClose, anchorRef, open, timePickerTarget }) => {
@@ -880,6 +879,151 @@ const DatePillsInput = forwardRef(({ value, onClick, isDatePickerOpen, onChange,
 });
 
 const ENERGY_LABELS = [null, 'Light', 'Easy', 'Moderate', 'Hard', 'Intense'];
+const TASK_TYPES = ['Work', 'School', 'Extra', 'Entertainment'];
+const TASK_TYPE_COLORS = {
+  Work: '#ff6b81',
+  School: '#4fc3f7',
+  Extra: '#ffb86b',
+  Entertainment: '#00bfae',
+};
+const TIME_STACK_BUFFER = 8;
+
+function taskTypeTextColor(type) {
+  return type === 'School' ? '#1565c0' : TASK_TYPE_COLORS[type];
+}
+
+function TaskTypeDropdown({ value, onChange, ui, isDay }) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+  const [menuStyle, setMenuStyle] = useState(null);
+
+  const placeMenu = useCallback(() => {
+    const trigger = triggerRef.current;
+    const menu = menuRef.current;
+    if (!trigger || !menu) return;
+    const rect = trigger.getBoundingClientRect();
+    const margin = 8;
+    const gap = 6;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const width = Math.min(Math.max(rect.width, menu.scrollWidth), vw - margin * 2);
+    let left = rect.left;
+    if (left + width > vw - margin) left = vw - margin - width;
+    if (left < margin) left = margin;
+    const menuHeight = menu.scrollHeight;
+    const spaceBelow = vh - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+    const openUp = menuHeight + gap > spaceBelow && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(80, (openUp ? spaceAbove : spaceBelow) - gap);
+    const visibleHeight = Math.min(menuHeight, maxHeight);
+    const top = openUp
+      ? Math.max(margin, rect.top - gap - visibleHeight)
+      : Math.min(rect.bottom + gap, vh - margin - visibleHeight);
+    setMenuStyle({
+      position: 'fixed',
+      top,
+      left,
+      width,
+      maxHeight,
+      zIndex: 10000,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    placeMenu();
+    const onKey = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    const onPointer = (event) => {
+      if (triggerRef.current?.contains(event.target)) return;
+      if (menuRef.current?.contains(event.target)) return;
+      setOpen(false);
+    };
+    const onScroll = (event) => {
+      if (menuRef.current && (event.target === menuRef.current || menuRef.current.contains(event.target))) return;
+      setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', placeMenu);
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', placeMenu);
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, placeMenu]);
+
+  return (
+    <>
+      <button
+        type="button"
+        ref={triggerRef}
+        className={`taskform-type-trigger${open ? ' is-open' : ''}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((next) => !next)}
+        style={{
+          marginTop: isDay ? '0.15rem' : '0.25rem',
+          background: ui.inputBg,
+          color: ui.inputText,
+          border: `1px solid ${ui.inputBorder}`,
+        }}
+      >
+        <span
+          className="taskform-type-chip"
+          style={{
+            background: `${TASK_TYPE_COLORS[value]}22`,
+            color: taskTypeTextColor(value),
+          }}
+        >
+          <span className="taskform-type-dot" style={{ background: TASK_TYPE_COLORS[value] }} />
+          <span className="taskform-type-chip-label">{value}</span>
+        </span>
+        <svg className="taskform-type-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && ReactDOM.createPortal(
+        <div
+          ref={menuRef}
+          className="taskform-type-menu"
+          role="listbox"
+          aria-label={isDay ? 'Type' : 'Task or event type'}
+          style={menuStyle ? menuStyle : { position: 'fixed', top: 0, left: 0, visibility: 'hidden' }}
+        >
+          {TASK_TYPES.map((type) => {
+            const selected = type === value;
+            return (
+              <button
+                key={type}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                className={`taskform-type-option${selected ? ' is-selected' : ''}`}
+                style={{
+                  background: `${TASK_TYPE_COLORS[type]}22`,
+                  color: taskTypeTextColor(type),
+                }}
+                onClick={() => {
+                  onChange(type);
+                  setOpen(false);
+                }}
+              >
+                <span className="taskform-type-dot" style={{ background: TASK_TYPE_COLORS[type] }} />
+                {type}
+              </button>
+            );
+          })}
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
 
 function toDeadlineYmd(value) {
   if (!value) return null;
@@ -902,8 +1046,10 @@ const TaskForm = ({
 }) => {
   const ui = TASKFORM_THEMES[variant] || TASKFORM_THEMES.dashboard;
   const isDay = variant === 'day';
-  const { isCompact } = useLayoutMode();
-  const stackEventTimes = !isDay && isCompact;
+  const metaRowRef = useRef(null);
+  const timePairMeasureRef = useRef(null);
+  const [timeLayout, setTimeLayout] = useState({ stack: false, pairWidth: 0 });
+  const stackEventTimes = timeLayout.stack;
   // Toggle state. Calendar create locks this to an event.
   const [creationType, setCreationType] = useState(eventOnly || defaultStartTime ? 'event' : 'task'); // 'task' or 'event'
   
@@ -1024,6 +1170,50 @@ const TaskForm = ({
   useEffect(() => {
     onTimesChangeRef.current?.(startTime, endTime);
   }, [startTime, endTime]);
+
+  useLayoutEffect(() => {
+    if (creationType !== 'event') return undefined;
+    const row = metaRowRef.current;
+    const measure = timePairMeasureRef.current;
+    if (!row || !measure) return undefined;
+
+    const update = () => {
+      const cols = measure.querySelectorAll('.taskform-time-measure-col');
+      if (!cols.length) return;
+      const colWidth = Math.max(...Array.from(cols, (col) => col.scrollWidth));
+      const gap = parseFloat(getComputedStyle(measure).columnGap) || 16;
+      const pairWidth = colWidth * 2 + gap;
+      const rowWidth = row.clientWidth;
+      if (!pairWidth || !rowWidth) return;
+
+      let available = rowWidth;
+      if (!isDay) {
+        const rowGap = parseFloat(getComputedStyle(row).columnGap) || 16;
+        const siblingMin = Math.min(150, rowWidth);
+        const siblings = siblingMin * 2 + rowGap * 2;
+        if (rowWidth >= siblings + pairWidth) {
+          available = rowWidth - siblings;
+        }
+      }
+
+      const stack = available < pairWidth + TIME_STACK_BUFFER;
+      setTimeLayout((prev) => (
+        prev.stack === stack && prev.pairWidth === pairWidth ? prev : { stack, pairWidth }
+      ));
+    };
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(row);
+    let cancelled = false;
+    document.fonts?.ready?.then(() => {
+      if (!cancelled) update();
+    });
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
+  }, [creationType, isDay]);
 
   // Reset dateInputValue when form is submitted
   const resetForm = () => {
@@ -1748,8 +1938,9 @@ const TaskForm = ({
       border: ui.cardBorder,
       boxShadow: ui.cardShadow,
       fontFamily: "'Karla', sans-serif",
-      width: isDay ? '100%' : undefined,
-      minWidth: isDay ? 0 : undefined,
+      width: '100%',
+      minWidth: 0,
+      maxWidth: '100%',
       minHeight: isDay ? 0 : undefined,
       height: isDay ? 'auto' : undefined,
       boxSizing: 'border-box',
@@ -1958,15 +2149,19 @@ const TaskForm = ({
 
         {/* Task Type, Deadline, and Duration - Side by Side */}
         <div
+          ref={metaRowRef}
           className={isDay ? 'taskform-day-row' : undefined}
           style={isDay ? undefined : { 
           display: 'flex', 
           gap: '1rem', 
           marginBottom: '0.5rem',
-          flexWrap: 'wrap'
+          flexWrap: 'wrap',
+          minWidth: 0,
+          maxWidth: '100%',
+          boxSizing: 'border-box'
         }}>
           {/* Task Type Dropdown */}
-          <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '150px' }}>
+          <div className={isDay ? 'taskform-day-field taskform-meta-field' : 'taskform-meta-field'} style={isDay ? undefined : { flex: '1 1 150px', minWidth: 'min(150px, 100%)', maxWidth: '100%' }}>
             <label style={{
               marginBottom: isDay ? '0.15rem' : '0.25rem',
               fontSize: '0.9rem',
@@ -1976,33 +2171,16 @@ const TaskForm = ({
             }}>
               {creationType === 'event' ? 'Event Type' : 'Task Type'}
             </label>
-            <select
+            <TaskTypeDropdown
               value={taskType}
-              onChange={(e) => setTaskType(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.875rem',
-
-                borderRadius: '8px',
-                border: `1px solid ${ui.inputBorder}`,
-                background: ui.inputBg,
-                color: ui.inputText,
-                fontSize: '0.9rem',
-                fontFamily: "'Karla', sans-serif",
-                outline: 'none',
-                transition: 'border-color 0.2s ease',
-                marginTop: isDay ? '0.15rem' : '0.25rem'
-              }}
-            >
-              <option value="Work">Work</option>
-              <option value="School">School</option>
-              <option value="Extra">Extra</option>
-              <option value="Entertainment">Entertainment</option>
-            </select>
+              onChange={setTaskType}
+              ui={ui}
+              isDay={isDay}
+            />
           </div>
 
           {/* Deadline Input with DatePicker */}
-          <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? { position: 'relative' } : { flex: '1', minWidth: '150px', position: 'relative' }}>
+          <div className={isDay ? 'taskform-day-field taskform-meta-field' : 'taskform-meta-field'} style={isDay ? { position: 'relative' } : { flex: '1 1 150px', minWidth: 'min(150px, 100%)', maxWidth: '100%', position: 'relative' }}>
             <label style={{
               marginBottom: isDay ? '0.15rem' : '0.25rem',
               fontSize: '0.9rem',
@@ -2108,15 +2286,25 @@ const TaskForm = ({
 
           {/* Time Pills (for events) or Duration Input (for tasks) */}
                       {creationType === 'event' ? (
-            <div className={isDay ? 'taskform-day-field taskform-day-times' : undefined} style={isDay ? undefined : (stackEventTimes ? {
-              flex: '1 1 100%',
-              minWidth: 0,
-              width: '100%',
+            <div className={isDay ? 'taskform-day-field taskform-day-times' : undefined} style={isDay ? undefined : {
+              flex: stackEventTimes ? '1 1 100%' : '1 1 auto',
+              minWidth: stackEventTimes ? 0 : timeLayout.pairWidth,
+              width: stackEventTimes ? '100%' : undefined,
               maxWidth: '100%',
               boxSizing: 'border-box'
-            } : { flex: '1', minWidth: '300px' })}>
+            }}>
+              <div ref={timePairMeasureRef} className="taskform-time-measure" aria-hidden="true">
+                <div className="taskform-time-measure-col">
+                  <div className="taskform-time-measure-label">Start Time</div>
+                  <span className="pill pill-time" style={{ ...stackedTimeButtonStyle, width: 'max-content', maxWidth: 'none', whiteSpace: 'nowrap' }}>00:00</span>
+                </div>
+                <div className="taskform-time-measure-col">
+                  <div className="taskform-time-measure-label">End Time</div>
+                  <span className="pill pill-time" style={{ ...stackedTimeButtonStyle, width: 'max-content', maxWidth: 'none', whiteSpace: 'nowrap' }}>00:00</span>
+                </div>
+              </div>
               {stackEventTimes ? (
-                <div style={{
+                <div className={isDay ? 'taskform-day-times-pills is-stacked' : undefined} style={{
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '1rem',
@@ -2172,10 +2360,14 @@ const TaskForm = ({
                 color: ui.label,
                 marginBottom: isDay ? '0.15rem' : '0.25rem',
                 display: 'flex',
-                gap: '1rem'
+                gap: '1rem',
+                width: '100%',
+                minWidth: 0,
+                maxWidth: '100%',
+                boxSizing: 'border-box'
               }}>
-                <div style={{ flex: '1', textAlign: 'center' }}>Start Time</div>
-                <div style={{ flex: '1', textAlign: 'center' }}>End Time</div>
+                <div style={{ flex: '1 1 0', minWidth: 0, textAlign: 'center', whiteSpace: 'nowrap' }}>Start Time</div>
+                <div style={{ flex: '1 1 0', minWidth: 0, textAlign: 'center', whiteSpace: 'nowrap' }}>End Time</div>
               </div>
               <div
                 className={isDay ? 'taskform-day-times-pills' : undefined}
@@ -2184,10 +2376,13 @@ const TaskForm = ({
                 gap: '1rem',
                 marginTop: '0.25rem',
                 width: '100%',
-                flexWrap: 'wrap'
+                minWidth: 0,
+                maxWidth: '100%',
+                boxSizing: 'border-box',
+                flexWrap: 'nowrap'
               }}>
                 {/* Start Time Section */}
-                <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '120px' }}>
+                <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1 1 0', minWidth: 0, maxWidth: '100%' }}>
                   <span
                     className={`pill pill-time pill-time-trigger${showTimePicker && timePickerTarget === 'start' ? ' active' : ''}`}
                     tabIndex={0}
@@ -2211,13 +2406,16 @@ const TaskForm = ({
                       border: ui.timePillBorder,
                       outline: 'none',
                       textAlign: 'center',
-                      minWidth: isDay ? 0 : '100px',
+                      minWidth: 0,
+                      maxWidth: '100%',
                       height: '50px',
                       cursor: 'pointer',
                       transition: 'background 0.2s',
                       caretColor: 'transparent',
                       userSelect: 'none',
-                      width: '100%'
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      whiteSpace: 'nowrap'
                     }}
                     onMouseEnter={(e) => e.target.style.backgroundColor = ui.timePillHover}
                     onMouseLeave={(e) => e.target.style.backgroundColor = ui.timePillBg}
@@ -2227,7 +2425,7 @@ const TaskForm = ({
                 </div>
 
                 {/* End Time Section */}
-                <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1', minWidth: '120px' }}>
+                <div className={isDay ? 'taskform-day-field' : undefined} style={isDay ? undefined : { flex: '1 1 0', minWidth: 0, maxWidth: '100%' }}>
                   <span
                     className={`pill pill-time pill-time-trigger${showTimePicker && timePickerTarget === 'end' ? ' active' : ''}`}
                     tabIndex={0}
@@ -2251,13 +2449,16 @@ const TaskForm = ({
                       border: ui.timePillBorder,
                       outline: 'none',
                       textAlign: 'center',
-                      minWidth: isDay ? 0 : '100px',
+                      minWidth: 0,
+                      maxWidth: '100%',
                       height: '50px',
                       cursor: 'pointer',
                       transition: 'background 0.2s',
                       caretColor: 'transparent',
                       userSelect: 'none',
-                      width: '100%'
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      whiteSpace: 'nowrap'
                     }}
                     onMouseEnter={(e) => e.target.style.backgroundColor = ui.timePillHover}
                     onMouseLeave={(e) => e.target.style.backgroundColor = ui.timePillBg}

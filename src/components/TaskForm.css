@@ -137,6 +137,17 @@ select {
   width: auto;
 }
 
+.taskform--day .taskform-day-times-pills.is-stacked {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 1rem;
+}
+
+.taskform--day .taskform-day-times-pills.is-stacked .taskform-day-field {
+  flex: none;
+  width: 100%;
+}
+
 .taskform--day input,
 .taskform--day select,
 .taskform--day button,
@@ -393,6 +404,143 @@ label, div, span, button, select {
 
 .pill-time.active {
   background: #5146d8;
+}
+
+.taskform-time-measure {
+  position: fixed;
+  left: 0;
+  top: 0;
+  transform: translateX(-100vw);
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 1rem;
+  width: max-content;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.taskform-time-measure-col {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: max-content;
+}
+
+.taskform-time-measure-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: 'Karla', sans-serif;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.taskform-type-trigger {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 50px;
+  padding: 0.45rem 0.75rem;
+  border-radius: 12px;
+  font-family: 'Karla', sans-serif;
+  font-size: 0.9rem;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.taskform-type-trigger:hover,
+.taskform-type-trigger:focus-visible,
+.taskform-type-trigger.is-open {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+}
+
+.taskform-type-chip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 0 0.7rem;
+  height: 25px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'Karla', sans-serif;
+  line-height: 25px;
+  white-space: nowrap;
+}
+
+.taskform-type-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.taskform-type-dot {
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.taskform-type-chevron {
+  flex: none;
+  transition: transform 0.2s ease;
+}
+
+.taskform-type-trigger.is-open .taskform-type-chevron {
+  transform: rotate(180deg);
+}
+
+.taskform-type-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 8px 4px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 2px 8px 0 rgba(60, 60, 60, 0.1);
+  overflow: auto;
+}
+
+.taskform-type-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 4px;
+  padding: 0 0.7rem;
+  height: 25px;
+  border: none;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'Karla', sans-serif;
+  line-height: 25px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, filter 0.15s;
+}
+
+.taskform-type-option:hover,
+.taskform-type-option:focus,
+.taskform-type-option:focus-visible {
+  background: #f3f0ff;
+  filter: brightness(1.1);
+}
+
+.taskform-type-option.is-selected {
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.taskform--day .taskform-type-trigger {
+  min-height: clamp(40px, 6vh, 50px);
+  padding: clamp(0.35rem, 1vh, 0.45rem) clamp(0.5rem, 1.5%, 0.75rem);
 }
 
 .taskform-level-slider::-webkit-slider-thumb {
